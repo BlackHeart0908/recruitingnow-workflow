@@ -3,2184 +3,380 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RecruitingNOW &middot; Proposed Architecture</title>
+<title>Workflow Library</title>
 <style>
 :root{
-  --bg-900:#1A1E20;
-  --bg-800:#23282B;
-  --bg-700:#2E3539;
-  --orange:#EF7F1A;
-  --orange-lt:#F4A327;
-  --orange-dk:#D86E0F;
-  --orange-dim:#6B4415;
+  --bg-900:#121618;
+  --bg-800:#1A1E20;
+  --bg-700:#23282B;
+  --bg-600:#2E3539;
   --ink:#FFFFFF;
   --ink-mute:#9BA6AB;
-  --ok:#4FA97F;
+  --ink-dim:#6B7579;
+  --accent:#7C6BF0;
+  --accent-dim:rgba(124,107,240,.18);
+  --border:rgba(255,255,255,.08);
+  --sidebar-w:280px;
+  --sidebar-collapsed:64px;
+  --topbar-h:48px;
+  --ease:cubic-bezier(.4,0,.2,1);
 }
 *{box-sizing:border-box;}
-html,body{height:100%;margin:0;padding:0;overflow:hidden;background:var(--bg-900);}
-body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);}
+html,body{height:100%;margin:0;padding:0;background:var(--bg-900);color:var(--ink);font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+button{font-family:inherit;cursor:pointer;}
 
-#topbar{position:fixed;top:0;left:0;right:0;height:38px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;z-index:50;background:linear-gradient(180deg, rgba(26,30,32,.97), rgba(26,30,32,.9));border-bottom:1px solid rgba(239,127,26,.18);gap:12px;}
-.brand{font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.15;white-space:nowrap;}
-.brand span{display:block;font-weight:400;font-size:9.5px;color:var(--ink-mute);margin-top:1px;}
+.app{display:flex;flex-direction:column;height:100%;overflow:hidden;}
 
-.modeToggle{display:flex;background:var(--bg-700);border:1px solid rgba(239,127,26,.25);border-radius:7px;padding:2px;gap:2px;}
-.seg{appearance:none;border:none;background:transparent;color:var(--ink-mute);font-size:11.5px;font-weight:600;padding:5px 12px;border-radius:5px;cursor:pointer;font-family:inherit;transition:background .25s,color .25s;}
-.seg.active{background:var(--orange);color:var(--bg-900);}
-.seg:not(.active):hover{color:var(--ink);}
-
+/* ── Top bar ── */
+.topbar{
+  height:var(--topbar-h);flex:none;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px 0 12px;
+  background:linear-gradient(180deg,rgba(18,22,24,.98),rgba(18,22,24,.92));
+  border-bottom:1px solid var(--border);
+  z-index:20;
+}
+.topbar-left{display:flex;align-items:center;gap:12px;min-width:0;}
+.menu-btn{
+  appearance:none;border:none;background:var(--bg-700);
+  color:var(--ink-mute);width:34px;height:34px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .2s,color .2s;
+}
+.menu-btn:hover{background:var(--bg-600);color:var(--ink);}
+.menu-btn svg{width:18px;height:18px;}
+.brand{display:flex;flex-direction:column;min-width:0;}
+.brand-title{font-size:14px;font-weight:700;letter-spacing:-.01em;line-height:1.2;}
+.brand-sub{font-size:10.5px;color:var(--ink-dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .topbar-right{display:flex;align-items:center;gap:10px;}
-.zoomControls{display:flex;align-items:center;gap:3px;background:var(--bg-700);border:1px solid rgba(239,127,26,.25);border-radius:7px;padding:2px 3px;}
-.zbtn{appearance:none;border:none;background:transparent;color:var(--ink-mute);font-size:13px;font-weight:700;width:20px;height:20px;border-radius:4px;cursor:pointer;font-family:inherit;line-height:1;display:flex;align-items:center;justify-content:center;}
-.zbtn:hover{background:rgba(255,255,255,.08);color:var(--ink);}
-.zbtn-reset{width:auto;padding:0 7px;font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;}
-.zoomPct{font-size:10px;color:var(--ink-mute);font-variant-numeric:tabular-nums;min-width:30px;text-align:center;}
+.count-badge{
+  font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--accent);background:var(--accent-dim);
+  padding:5px 10px;border-radius:20px;white-space:nowrap;
+}
 
-.simToggle{display:flex;align-items:center;gap:6px;background:var(--bg-700);border:1px solid rgba(239,127,26,.3);color:var(--ink);font-size:11px;font-weight:600;padding:5px 10px;border-radius:16px;cursor:pointer;font-family:inherit;}
-.simToggle .swdot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);flex:none;}
-.simToggle.off .swdot{background:var(--ink-mute);box-shadow:none;}
-.simToggle .state{color:var(--orange);font-weight:700;}
-.simToggle.off .state{color:var(--ink-mute);}
-.badge{background:rgba(239,127,26,.14);border:1px solid var(--orange-dim);color:var(--orange);padding:5px 11px;border-radius:16px;font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;}
+/* ── Body layout ── */
+.body{display:flex;flex:1;min-height:0;position:relative;}
 
-#canvasViewport{position:fixed;top:38px;left:0;right:0;bottom:0;overflow:hidden;cursor:grab;background:var(--bg-900);user-select:none;-webkit-user-select:none;touch-action:none;}
-#canvasViewport.dragging{cursor:grabbing;}
-#canvasInner{position:absolute;left:0;top:0;transform-origin:0 0;transition:filter .6s ease;}
-#canvasInner.frozen{filter:saturate(.5) brightness(.85);}
-#pipesSvg{position:absolute;left:0;top:0;overflow:visible;}
-#nodesLayer{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;}
-#boardsLayer{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;}
-.orch-glow{position:absolute;pointer-events:none;background:radial-gradient(ellipse at center, rgba(239,127,26,.16), rgba(239,127,26,0) 70%);}
+/* ── Sidebar ── */
+.sidebar{
+  width:var(--sidebar-w);flex:none;
+  background:var(--bg-800);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  transition:width .28s var(--ease),transform .28s var(--ease);
+  overflow:hidden;z-index:15;
+}
+.sidebar.collapsed{width:var(--sidebar-collapsed);}
+.sidebar-head{
+  padding:18px 16px 12px;
+  border-bottom:1px solid var(--border);
+  white-space:nowrap;overflow:hidden;
+}
+.sidebar.collapsed .sidebar-head{padding:18px 0 12px;text-align:center;}
+.sidebar-label{
+  font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-dim);
+}
+.sidebar.collapsed .sidebar-label{display:none;}
+.sidebar-count{
+  margin-top:4px;font-size:12px;color:var(--ink-mute);
+}
+.sidebar.collapsed .sidebar-count{display:none;}
 
-.engine-core-rect{fill:var(--bg-800);fill-opacity:.4;stroke:var(--orange-dim);stroke-width:1.5;stroke-dasharray:5 5;animation:engineBreathe 7s ease-in-out infinite;}
-@keyframes engineBreathe{0%,100%{opacity:.35;}50%{opacity:.7;}}
-#canvasInner.frozen .engine-core-rect{animation-play-state:paused;}
-.engine-core-label{position:absolute;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--orange);pointer-events:none;}
-.freshness-label{position:absolute;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-mute);pointer-events:none;white-space:nowrap;transform:translateX(-50%);}
+.workflow-list{
+  flex:1;overflow-y:auto;overflow-x:hidden;
+  padding:10px 8px 16px;
+  scrollbar-width:thin;scrollbar-color:var(--bg-600) transparent;
+}
+.workflow-list::-webkit-scrollbar{width:5px;}
+.workflow-list::-webkit-scrollbar-thumb{background:var(--bg-600);border-radius:3px;}
 
-.node{position:absolute;pointer-events:auto;cursor:pointer;background:linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,0) 40%), var(--bg-800);border:1.5px solid var(--orange-dim);border-radius:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.10), 0 8px 24px rgba(0,0,0,.35);transition:border-color .4s,box-shadow .4s,transform .3s;}
-.node.active{border-color:var(--orange);box-shadow:inset 0 1px 0 rgba(255,255,255,.10), 0 0 0 1px rgba(239,127,26,.25),0 0 24px rgba(239,127,26,.4),0 8px 24px rgba(0,0,0,.35);}
-.node.review{border-color:var(--orange-lt);}
-.node.review.active{border-color:var(--orange-lt);box-shadow:inset 0 1px 0 rgba(255,255,255,.10), 0 0 0 1px rgba(244,163,39,.3),0 0 24px rgba(244,163,39,.45),0 8px 24px rgba(0,0,0,.35);}
-.node.orch{background:linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,0) 40%), radial-gradient(circle at 50% 20%, var(--bg-700), var(--bg-800));}
-.node.engine{border-width:2px;}
-.node.engine .node-title{font-size:17px;}
-.node.selected{transform:translateY(-3px);border-color:var(--orange);box-shadow:inset 0 1px 0 rgba(255,255,255,.12), 0 0 0 2px var(--orange), 0 16px 36px rgba(0,0,0,.45), 0 0 34px rgba(239,127,26,.5);}
-.node-header{padding:14px 15px 12px;}
-.orch-title-row{display:flex;align-items:center;gap:8px;}
-.node-title{font-size:16px;font-weight:600;color:var(--ink);line-height:1.28;min-height:21px;}
-.node-subtitle{font-size:13px;font-weight:400;color:var(--ink-mute);margin-top:5px;line-height:1.42;}
-.counters{display:flex;gap:18px;margin-top:12px;flex-wrap:wrap;}
-.counter{display:flex;flex-direction:column;gap:3px;min-width:60px;}
-.counter-label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-mute);}
-.counter-value{font-size:15px;font-weight:700;color:var(--orange);font-variant-numeric:tabular-nums;}
-.bar-track{width:100%;height:4px;background:var(--bg-700);border-radius:2px;margin-top:5px;overflow:hidden;}
-.bar-fill{height:100%;background:var(--orange);border-radius:2px;transition:width .3s ease;}
+.wf-card{
+  appearance:none;border:none;width:100%;text-align:left;
+  background:transparent;color:inherit;
+  border-radius:10px;padding:0;margin-bottom:6px;
+  cursor:pointer;position:relative;
+  transition:background .2s,transform .15s;
+}
+.wf-card:hover{background:rgba(255,255,255,.04);}
+.wf-card.active{background:rgba(255,255,255,.06);}
+.wf-card-inner{
+  display:flex;gap:0;overflow:hidden;border-radius:10px;
+  border:1px solid transparent;
+  transition:border-color .2s;
+}
+.wf-card.active .wf-card-inner{border-color:rgba(255,255,255,.1);}
+.wf-accent{width:4px;flex:none;border-radius:10px 0 0 10px;}
+.wf-body{padding:12px 14px 12px 12px;min-width:0;flex:1;}
+.sidebar.collapsed .wf-body{padding:12px 0;display:flex;justify-content:center;}
+.sidebar.collapsed .wf-text{display:none;}
+.wf-dot{width:10px;height:10px;border-radius:50%;flex:none;margin-top:2px;}
+.wf-title{font-size:13px;font-weight:600;line-height:1.25;color:var(--ink);}
+.wf-sub{font-size:11px;color:var(--ink-mute);margin-top:3px;line-height:1.35;}
+.wf-client{font-size:10px;color:var(--ink-dim);margin-top:5px;}
+.wf-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;}
+.wf-tag{
+  font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+  padding:3px 7px;border-radius:4px;
+  background:rgba(255,255,255,.05);color:var(--ink-mute);
+}
 
-.spinner svg{display:block;}
-.spin-track{fill:none;stroke:var(--orange-dim);stroke-width:1.4;opacity:.35;}
-.spin-arc{fill:none;stroke:var(--orange);stroke-width:2.6;stroke-linecap:round;stroke-dasharray:32 24;transform-origin:50% 50%;transform-box:fill-box;}
-#spin-orchestrator.flash .spin-arc{stroke-width:4;filter:drop-shadow(0 0 5px rgba(239,127,26,.9));}
+.sidebar-foot{
+  padding:12px 16px;border-top:1px solid var(--border);
+  font-size:10px;color:var(--ink-dim);line-height:1.45;
+  white-space:nowrap;overflow:hidden;
+}
+.sidebar.collapsed .sidebar-foot{display:none;}
 
-.minor-wrap{padding:0 15px;max-height:0;overflow:hidden;transition:max-height .45s cubic-bezier(.4,0,.2,1);}
-.minor-inner{padding-bottom:14px;}
-.minor-list{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:7px;}
-.minor-list li{display:flex;align-items:flex-start;gap:8px;}
-.minor-list .dot{width:5px;height:5px;margin-top:6px;border-radius:50%;background:var(--orange-dim);flex:none;transition:background .3s,box-shadow .3s;}
-.minor-list .txt{font-size:12px;line-height:1.5;color:var(--ink-mute);transition:color .3s;}
-.minor-list li.hl .dot{background:var(--orange);box-shadow:0 0 6px rgba(239,127,26,.7);}
-.minor-list li.hl .txt{color:var(--ink);}
+/* ── Main viewer ── */
+.viewer{flex:1;min-width:0;position:relative;background:var(--bg-900);}
+.viewer-frame{
+  position:absolute;inset:0;border:none;width:100%;height:100%;
+  background:var(--bg-800);
+}
+.viewer-loading{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:14px;
+  background:var(--bg-900);z-index:5;
+  transition:opacity .35s var(--ease),visibility .35s;
+}
+.viewer-loading.hidden{opacity:0;visibility:hidden;pointer-events:none;}
+.spinner{
+  width:32px;height:32px;border-radius:50%;
+  border:2.5px solid var(--bg-600);
+  border-top-color:var(--accent);
+  animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-text{font-size:12px;color:var(--ink-mute);}
 
-.pipe path{fill:none;stroke:var(--orange-dim);stroke-width:2;opacity:.5;transition:stroke .4s,opacity .4s;}
-.pipe.active path{stroke:var(--orange);opacity:1;}
-.pipe .particle{fill:var(--orange);opacity:0;transition:opacity .3s;}
-.pipe.active .particle{opacity:1;filter:drop-shadow(0 0 2.5px rgba(239,127,26,.85));}
-.pipe.freshness path{stroke-dasharray:6 6;}
-.control path{fill:none;stroke:var(--orange-dim);stroke-width:1.3;opacity:.3;transition:stroke .35s,opacity .35s,stroke-width .35s;}
-.control.active path{stroke:var(--orange);opacity:.7;}
-.control.flash path{stroke:var(--orange);opacity:1;stroke-width:2.6;}
-.control .particle{fill:var(--orange);filter:drop-shadow(0 0 2px rgba(239,127,26,.8));}
-.branch path{fill:none;stroke:var(--orange-dim);stroke-width:2;opacity:.45;stroke-dasharray:2 5;transition:stroke .4s,opacity .4s;}
-.branch.active path{stroke:var(--orange-lt);opacity:.85;}
-.branch .particle{fill:var(--orange-lt);filter:drop-shadow(0 0 2.5px rgba(244,163,39,.85));}
-.arrow-fill-main{fill:var(--orange);}
-.arrow-fill-review{fill:var(--orange-lt);}
+.viewer-empty{
+  position:absolute;inset:0;display:none;
+  flex-direction:column;align-items:center;justify-content:center;
+  gap:8px;padding:24px;text-align:center;
+}
+.viewer-empty.show{display:flex;}
+.empty-icon{font-size:36px;opacity:.35;}
+.empty-title{font-size:15px;font-weight:600;}
+.empty-sub{font-size:12px;color:var(--ink-mute);max-width:320px;line-height:1.5;}
 
-.tooltip{position:fixed;display:none;width:280px;background:var(--bg-700);border:1px solid var(--orange-dim);border-radius:10px;padding:14px 16px;box-shadow:0 16px 40px rgba(0,0,0,.5);z-index:200;pointer-events:none;}
-.tt-row{margin-bottom:10px;}
-.tt-row:last-child{margin-bottom:0;}
-.tt-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--orange);font-weight:700;margin-bottom:3px;}
-.tt-value{font-size:14px;line-height:1.45;color:var(--ink);}
+/* ── Mobile overlay ── */
+.backdrop{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);
+  z-index:10;opacity:0;transition:opacity .28s var(--ease);
+}
+.backdrop.show{display:block;opacity:1;}
 
-.docs-panel{position:fixed;top:38px;right:0;bottom:0;width:380px;background:var(--bg-800);border-left:1px solid var(--orange-dim);padding:26px 24px;transform:translateX(100%);transition:transform .5s cubic-bezier(.4,0,.2,1);z-index:40;overflow-y:auto;}
-.docs-panel.open{transform:translateX(0);}
-.docs-panel h2{font-size:16px;margin:0 0 4px;color:var(--ink);}
-.docs-panel .sub{font-size:12.5px;color:var(--ink-mute);margin:0 0 18px;}
-.docs-panel ol{margin:0 0 24px;padding-left:20px;}
-.docs-panel ol li{font-size:13.5px;line-height:1.6;color:var(--ink-mute);margin-bottom:10px;}
-.doctrine p{font-size:13.5px;line-height:1.6;color:var(--ink);border-left:2px solid var(--orange);padding-left:12px;margin:0 0 16px;}
-.doctrine p strong{color:var(--orange);}
-
-.detail-panel{position:fixed;top:38px;right:0;bottom:0;width:400px;background:var(--bg-700);border-left:1px solid var(--orange-dim);transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);z-index:70;overflow-y:auto;box-shadow:-10px 0 30px rgba(0,0,0,.35);}
-.detail-panel.open{transform:translateX(0);}
-.dp-close{position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--ink-mute);font-size:17px;line-height:1;cursor:pointer;}
-.dp-close:hover{color:var(--ink);border-color:rgba(255,255,255,.28);}
-.dp-body{padding:54px 26px 32px;}
-.dp-tag{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--orange);font-weight:700;margin-bottom:6px;}
-.dp-body h2{font-size:20px;margin:0 0 20px;color:var(--ink);}
-.dp-section{margin-bottom:22px;}
-.dp-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--orange);font-weight:700;margin-bottom:6px;}
-.dp-section p{font-size:14px;line-height:1.55;color:var(--ink);margin:0;}
-.dp-now{color:var(--ink-mute) !important;font-style:italic;}
-.dp-counters{display:flex;flex-wrap:wrap;gap:20px;}
-.dp-counter{display:flex;flex-direction:column;gap:4px;}
-.dp-counter-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-mute);}
-.dp-counter-value{font-size:22px;font-weight:700;color:var(--orange);font-variant-numeric:tabular-nums;}
-.dp-minor-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;}
-.dp-minor-list li{display:flex;align-items:flex-start;gap:9px;font-size:13px;line-height:1.5;color:var(--ink-mute);}
-.dp-minor-list .dot{width:5px;height:5px;margin-top:6px;border-radius:50%;background:var(--orange-dim);flex:none;}
-.dp-minor-note{margin:14px 0 0;padding-top:12px;border-top:1px solid rgba(255,255,255,.1);font-size:12px;line-height:1.55;color:var(--ink-mute);font-style:italic;}
-
-.footer{position:fixed;left:16px;bottom:10px;font-size:12px;color:var(--ink-mute);z-index:45;pointer-events:none;}
-
-/* ---------- proposal territory: boards (reuse .node for chrome, see buildBoards()) ---------- */
-.board{padding:38px 42px;}
-.board-headline{font-size:44px;font-weight:700;color:var(--ink);line-height:1.18;}
-.board-sub{font-size:22px;font-weight:400;color:var(--ink-mute);line-height:1.42;margin-top:14px;}
-.board-lines-wrap{max-height:0;overflow:hidden;transition:max-height .45s cubic-bezier(.4,0,.2,1);}
-.board-lines-inner{padding-top:20px;}
-.board-lines{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px;}
-.board-lines li{display:flex;align-items:flex-start;gap:11px;}
-.board-lines .dot{width:6px;height:6px;margin-top:9px;border-radius:50%;background:var(--orange);flex:none;}
-.board-lines .txt{font-size:18px;line-height:1.5;color:var(--ink);}
-.board-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:22px;margin-top:28px;}
-.board-card{position:relative;padding:22px 22px;cursor:pointer;}
-.board-card.recommended{border-color:var(--orange);box-shadow:inset 0 1px 0 rgba(255,255,255,.10), 0 0 0 1px rgba(239,127,26,.35), 0 8px 24px rgba(0,0,0,.35);}
-.board-card-title{font-size:19px;font-weight:700;color:var(--ink);line-height:1.32;}
-.board-card-line{font-size:16px;color:var(--ink-mute);line-height:1.52;margin-top:11px;}
-.board-tiles{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:28px;}
-.board-tile{font-size:18px;line-height:1.45;color:var(--ink);padding:18px 20px;background:rgba(239,127,26,.06);border:1px solid rgba(239,127,26,.16);border-radius:10px;}
-
-@keyframes boardReveal{from{opacity:.3;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
-.board-anim{animation:boardReveal .4s ease-out;}
-
-.board-edge path{fill:none;stroke:var(--orange);stroke-width:5;opacity:.8;stroke-linecap:round;}
-.board-edge.branch path{stroke:var(--orange-lt);stroke-width:4;stroke-dasharray:4 7;opacity:.55;}
-.board-edge .particle{fill:var(--orange);}
-
-/* ---------- manual-enrichment cost calculator (topbar tool, Task C) ---------- */
-.calcScrim{position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:300;display:none;align-items:center;justify-content:center;}
-.calcScrim.open{display:flex;}
-.calcModal{position:relative;background:var(--bg-700);border:1px solid var(--orange-dim);border-radius:14px;padding:40px 44px 34px;width:600px;max-width:92vw;max-height:88vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.55);}
-.calcModal h2{font-size:25px;margin:0 0 6px;color:var(--ink);}
-.calcSubhead{font-size:14px;color:var(--ink-mute);margin:0 0 26px;}
-.calcRow{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:14px;}
-.calcRow label{font-size:14.5px;color:var(--ink);line-height:1.4;}
-.calcRow input{width:130px;background:var(--bg-800);border:1px solid rgba(255,255,255,.16);border-radius:8px;color:var(--ink);font-size:16px;padding:8px 10px;font-variant-numeric:tabular-nums;text-align:right;font-family:inherit;}
-.calcRow input:focus{outline:none;border-color:var(--orange);}
-.calcOutputs{margin-top:26px;padding-top:22px;border-top:1px solid rgba(255,255,255,.12);}
-.calcTotalLabel{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--orange);font-weight:700;margin-bottom:6px;}
-.calcTotal{font-size:44px;font-weight:700;color:var(--ink);line-height:1.1;font-variant-numeric:tabular-nums;}
-.calcTime{font-size:18px;color:var(--ink);margin-top:16px;}
-.calcPerAccount{font-size:13px;color:var(--ink-mute);margin-top:10px;}
+@media(max-width:768px){
+  .sidebar{
+    position:fixed;top:var(--topbar-h);left:0;bottom:0;
+    transform:translateX(-100%);
+    box-shadow:8px 0 32px rgba(0,0,0,.4);
+  }
+  .sidebar.open{transform:translateX(0);}
+  .sidebar.collapsed{width:var(--sidebar-w);}
+}
 </style>
 </head>
 <body>
+<div class="app">
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="menu-btn" id="menuBtn" aria-label="Toggle sidebar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <div class="brand">
+        <div class="brand-title">Workflow Library</div>
+        <div class="brand-sub" id="activeLabel">Select a workflow to begin</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span class="count-badge" id="countBadge">0 workflows</span>
+    </div>
+  </header>
 
-<div id="topbar">
-  <div class="brand">RecruitingNOW<span>Salesforce Enrichment Pipeline</span></div>
-  <div class="modeToggle">
-    <button id="btnMajor" class="seg active" aria-pressed="true" type="button">Process overview</button>
-    <button id="btnMinor" class="seg" aria-pressed="false" type="button">Full detail</button>
-  </div>
-  <div class="topbar-right">
-    <div class="modeToggle" id="territoryToggle">
-      <button id="btnProposal" class="seg" aria-pressed="false" type="button">Proposal</button>
-      <button id="btnWorkflow" class="seg active" aria-pressed="true" type="button">Workflow</button>
-    </div>
-    <button id="btnCalculator" class="simToggle" type="button">Calculator</button>
-    <div class="zoomControls">
-      <button id="zoomOut" class="zbtn" type="button" title="Zoom out (-)">&minus;</button>
-      <span id="zoomPct" class="zoomPct">100%</span>
-      <button id="zoomIn" class="zbtn" type="button" title="Zoom in (+)">+</button>
-      <button id="zoomReset" class="zbtn zbtn-reset" type="button" title="Reset zoom (0)">Reset</button>
-    </div>
-    <button id="simToggle" class="simToggle" aria-pressed="true" type="button"><span class="swdot"></span>Live simulation<span class="state">ON</span></button>
-    <div class="badge">Proposed Architecture</div>
-  </div>
-</div>
+  <div class="body">
+    <div class="backdrop" id="backdrop"></div>
 
-<div id="canvasViewport">
-  <div id="canvasInner">
-    <svg id="pipesSvg"></svg>
-    <div id="nodesLayer"></div>
-    <div id="boardsLayer"></div>
-  </div>
-</div>
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-head">
+        <div class="sidebar-label">Canvases</div>
+        <div class="sidebar-count" id="sidebarCount"></div>
+      </div>
+      <div class="workflow-list" id="workflowList"></div>
+      <div class="sidebar-foot">Drop new HTML files into <strong>workflows/</strong> and register them in <strong>workflows.json</strong>.</div>
+    </aside>
 
-<div class="docs-panel" id="docsPanel">
-  <h2>Pipeline summary</h2>
-  <p class="sub">Eight stages, one closed loop back into Salesforce.</p>
-  <ol id="docsList"></ol>
-  <div class="doctrine">
-    <p><strong>We never overwrite.</strong> Machine data lands in its own fields. Your existing data is untouchable.</p>
-    <p><strong>We never guess.</strong> Anything ambiguous goes to a human, not to your CRM.</p>
-    <p><strong>We never lock you in.</strong> Every data provider sits behind a swappable adapter.</p>
-  </div>
-</div>
-
-<div class="detail-panel" id="detailPanel">
-  <button class="dp-close" id="dpClose" type="button" aria-label="Close detail panel">&times;</button>
-  <div class="dp-body">
-    <div class="dp-tag" id="dpTag"></div>
-    <h2 id="dpTitle"></h2>
-    <div class="dp-section" id="dpWhatSection">
-      <div class="dp-label" id="dpWhatLabel">What it does</div>
-      <p id="dpWhat"></p>
-    </div>
-    <div class="dp-section" id="dpWhySection">
-      <div class="dp-label">Why it is running</div>
-      <p id="dpWhy"></p>
-    </div>
-    <div class="dp-section" id="dpNowSection">
-      <div class="dp-label">Right now</div>
-      <p id="dpNow" class="dp-now"></p>
-    </div>
-    <div class="dp-section" id="dpCountersSection">
-      <div class="dp-label">Live counters</div>
-      <div class="dp-counters" id="dpCounters"></div>
-    </div>
-    <div class="dp-section" id="dpMinorSection">
-      <div class="dp-label" id="dpMinorLabel">Inside this stage</div>
-      <ul class="dp-minor-list" id="dpMinorList"></ul>
-      <p class="dp-minor-note" id="dpMinorNote" style="display:none;"></p>
-    </div>
+    <main class="viewer">
+      <div class="viewer-loading" id="loading">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loadingText">Loading workflow…</div>
+      </div>
+      <div class="viewer-empty" id="empty">
+        <div class="empty-icon">◈</div>
+        <div class="empty-title">No workflow selected</div>
+        <div class="empty-sub">Choose a canvas from the sidebar to load an interactive workflow demo.</div>
+      </div>
+      <iframe class="viewer-frame" id="frame" title="Workflow canvas" hidden></iframe>
+    </main>
   </div>
 </div>
-
-<div class="tooltip" id="tooltip">
-  <div class="tt-row"><div class="tt-label">What it does</div><div class="tt-value" id="ttWhat"></div></div>
-  <div class="tt-row"><div class="tt-label">Why it is running</div><div class="tt-value" id="ttWhy"></div></div>
-  <div class="tt-row"><div class="tt-label">Right now</div><div class="tt-value" id="ttNow"></div></div>
-</div>
-
-<div class="calcScrim" id="calcScrim">
-  <div class="calcModal" id="calcModal">
-    <button class="dp-close" id="calcClose" type="button" aria-label="Close calculator">&times;</button>
-    <h2>Manual enrichment cost</h2>
-    <p class="calcSubhead">What it costs to do this by hand, on your own numbers.</p>
-
-    <div class="calcRow"><label for="calcHours">Working hours per day</label><input id="calcHours" type="number" value="8" step="0.5" min="0"></div>
-    <div class="calcRow"><label for="calcRate">Accounts enriched per person per day</label><input id="calcRate" type="number" value="20" step="1" min="0"></div>
-    <div class="calcRow"><label for="calcSalary">Monthly salary per employee (€)</label><input id="calcSalary" type="number" value="4000" step="100" min="0"></div>
-    <div class="calcRow"><label for="calcDays">Working days per month</label><input id="calcDays" type="number" value="22" step="1" min="0"></div>
-    <div class="calcRow"><label for="calcEmployees">Number of employees</label><input id="calcEmployees" type="number" value="4" step="1" min="0"></div>
-    <div class="calcRow"><label for="calcPool">Pool size (accounts to enrich)</label><input id="calcPool" type="number" value="5000" step="100" min="0"></div>
-
-    <div class="calcOutputs">
-      <div class="calcTotalLabel">Total cost</div>
-      <div class="calcTotal" id="calcTotalOut">&mdash;</div>
-      <div class="calcTime" id="calcTimeOut"></div>
-      <div class="calcPerAccount" id="calcPerAccountOut"></div>
-    </div>
-  </div>
-</div>
-
-<div class="footer">Simulated data. Illustrative of proposed architecture.</div>
 
 <script>
 (function(){
-'use strict';
-/* Motion is deliberately NOT gated behind prefers-reduced-motion here.
-   This file is a live sales demo instrument, not a document; constant
-   motion is the point. Do not "fix" this by adding a reduced-motion guard. */
+  var STORAGE_COLLAPSED = 'wflib.sidebarCollapsed';
+  var STORAGE_LAST = 'wflib.lastWorkflow';
+  var MOBILE = window.matchMedia('(max-width:768px)');
 
-var NS = 'http://www.w3.org/2000/svg';
-var SIM_SPEED = 1.4;   // raise/lower to retune the whole simulation
-var LOOP_DUR = 90 / SIM_SPEED;
-var EASE_WINDOW = 2;
+  var workflows = [];
+  var activeId = null;
 
-/* ---------- layout constants ----------
-   Fixed pixel design canvas. No vw/vh/%/calc(100vh..) anywhere below -
-   that is what let browser zoom fight the layout before. Positions are
-   computed once at load (some via real DOM measurement, see finalizeLayout),
-   then the whole canvas is moved/scaled purely via our own zoom/pan
-   transform, never re-derived from the viewport.
+  var sidebar = document.getElementById('sidebar');
+  var backdrop = document.getElementById('backdrop');
+  var workflowList = document.getElementById('workflowList');
+  var frame = document.getElementById('frame');
+  var loading = document.getElementById('loading');
+  var loadingText = document.getElementById('loadingText');
+  var empty = document.getElementById('empty');
+  var activeLabel = document.getElementById('activeLabel');
+  var countBadge = document.getElementById('countBadge');
+  var sidebarCount = document.getElementById('sidebarCount');
 
-   The canvas now holds THREE regions left to right: the proposal territory,
-   an empty gutter, then the workflow (unchanged internally, just shifted
-   right by WORKFLOW_OFFSET_X). See CONTEXT.md "Territory architecture". */
-var CANVAS_PAD = 56, NODE_W = 170, GAP_X = 72, MAJOR_H_EST = 150;
-var ORCH_TO_ROW_GAP_MIN = 90, ROW_TO_REVIEW_GAP_MIN = 60;
-var ORCH_W = 340, ORCH_Y = CANVAS_PAD;
-var REVIEW_W = 190;
+  function isMobile(){ return MOBILE.matches; }
 
-/* ---------- proposal territory constants ---------- */
-var BOARD_W = 620;            // standard board width
-var BOARD_CARDS_W = 980;      // wide board (proof's 3 cards, return's 4 tiles)
-var BOARD_GAP_Y = 130;        // vertical gap between chained spine boards
-var BOARD_GAP_Y_WIDE = 230;   // wider gap: board0->A1, and the act separator
-var BRANCH_GAP_X = 60;        // horizontal gap from spine's left edge to a branch board
-var BRANCH_GAP_Y = 40;        // vertical gap between stacked branch boards
-var PROPOSAL_PAD = 70;        // proposal territory's own outer padding (mirrors CANVAS_PAD)
-var GUTTER_W = 1800;          // empty travel distance between territories
-
-var PROPOSAL_SPINE_W = Math.max(BOARD_W, BOARD_CARDS_W);
-var PROPOSAL_W = PROPOSAL_PAD + (BRANCH_GAP_X + BOARD_W) + PROPOSAL_SPINE_W + PROPOSAL_PAD;
-var SPINE_CENTER_X = PROPOSAL_PAD + (BRANCH_GAP_X + BOARD_W) + PROPOSAL_SPINE_W/2;
-var SPINE_LEFT_X = SPINE_CENTER_X - PROPOSAL_SPINE_W/2;
-
-var WORKFLOW_OFFSET_X = PROPOSAL_W + GUTTER_W;
-
-var ROW_TOTAL_W = 7*NODE_W + 6*GAP_X;
-var ROW_CENTER_X = WORKFLOW_OFFSET_X + CANVAS_PAD + ROW_TOTAL_W/2;
-var ORCH_X = ROW_CENTER_X - ORCH_W/2;
-var REVIEW_X = ROW_CENTER_X - REVIEW_W/2;
-var WORKFLOW_W = CANVAS_PAD*2 + ROW_TOTAL_W;
-var CANVAS_W = WORKFLOW_OFFSET_X + WORKFLOW_W;
-var ROW_Y = ORCH_Y + MAJOR_H_EST + ORCH_TO_ROW_GAP_MIN; // provisional, corrected in finalizeLayout()
-var CANVAS_H = 1200; // provisional, corrected in finalizeLayout()
-
-var ENGINE_RECT = null;
-var FRESHNESS_DIP_Y = 0;
-
-var COMPANIES = [
-  {name:'Müller Logistik GmbH', zip:'40468', city:'Düsseldorf'},
-  {name:'Schäfer Maschinenbau AG', zip:'70173', city:'Stuttgart'},
-  {name:'Weber Elektrotechnik GmbH', zip:'50667', city:'Köln'},
-  {name:'Fischer & Söhne Bau GmbH', zip:'80331', city:'München'},
-  {name:'Hoffmann IT Systeme GmbH', zip:'60311', city:'Frankfurt'},
-  {name:'Wagner Präzisionstechnik GmbH', zip:'45127', city:'Essen'},
-  {name:'Becker Personaldienste GmbH', zip:'10115', city:'Berlin'},
-  {name:'Schmidt Logistics GmbH', zip:'20095', city:'Hamburg'},
-  {name:'Klein & Partner Beratung GmbH', zip:'44135', city:'Dortmund'},
-  {name:'Neumann Fertigungstechnik GmbH', zip:'04109', city:'Leipzig'},
-  {name:'Zimmermann Software AG', zip:'80331', city:'München'},
-  {name:'Krüger Industrieservice GmbH', zip:'60311', city:'Frankfurt'},
-  {name:'Bergmann Metallbau GmbH', zip:'50667', city:'Köln'},
-  {name:'Lindner Gesundheitstechnik GmbH', zip:'20095', city:'Hamburg'}
-];
-
-var ENGINE_IDS = ['n3','n4','n5','n6'];
-
-var NODES = [
-  {
-    id:'orchestrator', kind:'orch', title:'Orchestrator',
-    subtitle:'Routing, budget governor, quality gate',
-    counters:[
-      {id:'decisions', label:'decisions / min', type:'gauge', mean:34, min:18, max:52, vol:7, fmt:'int'},
-      {id:'budget', label:'budget used', type:'gauge', mean:44, min:26, max:62, vol:4, fmt:'pct0', bar:true}
-    ],
-    minor:[
-      'Per source budget caps enforced before every call',
-      'Retry and resume on failure',
-      'Per record isolation, one bad record never stops the run',
-      'Cost ledger'
-    ],
-    tooltip:{
-      what:'Coordinates every stage, enforces spend limits, and makes the final call on where each record goes next.',
-      why:'Keeps the whole pipeline predictable and within budget while it runs unattended.'
-    }
-  },
-  {
-    id:'n1', kind:'stage', title:'Salesforce',
-    subtitle:'Active pool sync, read only',
-    counters:[
-      {id:'indexed', label:'accounts indexed', type:'gauge', mean:4812, min:4788, max:4836, vol:6, fmt:'int-comma'}
-    ],
-    tooltip:{
-      what:'Reads your active account and contact pool so the pipeline knows what you already have.',
-      why:'Nothing gets treated as new if it is already sitting in your CRM.'
-    }
-  },
-  {
-    id:'n2', kind:'stage', title:'Demand Discovery',
-    subtitle:'TheirStack, live hiring signal by ZIP and ICP',
-    window:[0,0.42],
-    counters:[
-      {id:'found', label:'companies found', type:'cumulative', seed:214, rate:[2.5,5.5], fmt:'int'},
-      {id:'signals', label:'signals live', type:'gauge', mean:19, min:8, max:34, vol:5, fmt:'int'}
-    ],
-    minor:[
-      'ZIP cluster filter',
-      'Role keyword match',
-      'Live posting freshness window',
-      'Duplicate posting suppression',
-      'Incremental cursor since last run'
-    ],
-    tooltip:{
-      what:'Watches for companies actively hiring roles that match your ideal customer profile, by region.',
-      why:'Surfaces buyers with a live, timely reason to talk to you right now.'
-    }
-  },
-  {
-    id:'n3', kind:'stage', title:'Identity Resolution',
-    subtitle:'One canonical company, one key',
-    window:[0.08,0.54],
-    counters:[
-      {id:'resolved', label:'resolved', type:'cumulative', seed:176, rate:[2,4.5], fmt:'int'},
-      {id:'confidence', label:'confidence', type:'gauge', mean:96.4, min:95.2, max:97.8, vol:0.3, fmt:'pct1'}
-    ],
-    minor:[
-      'Registrable domain extraction',
-      'Legal form and umlaut normalisation',
-      'German company register cross-check (free public source, evaluated)',
-      'Canonical key assignment'
-    ],
-    tooltip:{
-      what:'Turns a messy company mention into one clean, canonical company record.',
-      why:'Prevents the same company showing up three different ways across your data.'
-    }
-  },
-  {
-    id:'n4', kind:'stage', title:'CRM Match Engine',
-    subtitle:'Already yours, or net new',
-    window:[0.20,0.66],
-    counters:[
-      {id:'existing', label:'existing', type:'cumulative', seed:132, rate:[1.2,2.6], fmt:'int'},
-      {id:'netnew', label:'net-new', type:'cumulative', seed:98, rate:[1,2.2], fmt:'int'}
-    ],
-    minor:[
-      'Blocking and candidate shortlist',
-      'Deterministic scoring',
-      'Score ≥ 90 → existing',
-      'Score ≤ 60 → net new',
-      '60 to 90 → adjudication, then human review. Never auto decided'
-    ],
-    tooltip:{
-      what:'Checks every resolved company against your existing Salesforce pool before anything else happens.',
-      why:'Existing accounts get enriched, not duplicated. Net-new accounts get a fresh record.'
-    }
-  },
-  {
-    id:'n5', kind:'stage', title:'Contact Enrichment',
-    subtitle:'Lusha, Apollo. Decision makers and direct contacts',
-    window:[0.34,0.80],
-    counters:[
-      {id:'enriched', label:'contacts enriched', type:'cumulative', seed:187, rate:[2,4], fmt:'int'},
-      {id:'depth', label:'waterfall depth', type:'gauge', mean:1.8, min:1.1, max:2.6, vol:0.15, fmt:'dec1'}
-    ],
-    minor:[
-      'Layer 0 · Public company sources (Impressum, register). Free, evaluated. Company level only',
-      'Layer 1 · Job posting embedded contacts. Free',
-      'Layer 2 · Lusha, decision maker level',
-      'Layer 3 · Premium residual, hardest records only'
-    ],
-    minorNote:'Public German sources are legally published and free, and we use them for company level facts. They cannot supply verified personal decision maker contacts, which is what your outreach actually needs, so the paid layers carry that load.',
-    tooltip:{
-      what:'Finds the named decision makers at each company and their direct contact details.',
-      why:'Outreach goes to a real person with the right title, not a general inbox.'
-    }
-  },
-  {
-    id:'n6', kind:'stage', title:'Verification',
-    subtitle:'MillionVerifier. Deliverability and confidence scoring',
-    window:[0.50,0.90],
-    counters:[
-      {id:'verified', label:'verified', type:'cumulative', seed:151, rate:[1.8,3.6], fmt:'int'},
-      {id:'deliverable', label:'deliverable', type:'gauge', mean:89.2, min:86, max:92, vol:0.5, fmt:'pct1'}
-    ],
-    minor:[
-      'Syntax and domain check',
-      'Mail exchange validation',
-      'Deliverability verification',
-      'Catch-all detection',
-      'Phone normalisation to E.164',
-      'Per field confidence score'
-    ],
-    tooltip:{
-      what:'Checks every email and phone number is real and reachable before it ever reaches Salesforce.',
-      why:'Protects your sender reputation and keeps your team from chasing dead contacts.'
-    }
-  },
-  {
-    id:'n7', kind:'stage', title:'Salesforce Write-back',
-    subtitle:'Fill only, never overwrite. Full provenance',
-    window:[0.68,1.0],
-    counters:[
-      {id:'written', label:'written', type:'cumulative', seed:121, rate:[1.5,3], fmt:'int'},
-      {id:'rolledback', label:'rolled back', type:'fixed', value:0, fmt:'int'}
-    ],
-    minor:[
-      'Upsert on external ID, never duplicates',
-      'Machine data to dedicated fields',
-      'Native fields filled only when empty',
-      'Source and timestamp on every field',
-      'Dry run diff before any write',
-      'One command rollback'
-    ],
-    tooltip:{
-      what:'Writes verified data back into Salesforce, filling gaps without touching what is already there.',
-      why:'Your CRM stays the single source of truth, with a full record of where each field came from.'
-    }
-  },
-  {
-    id:'review', kind:'review', title:'Human Review',
-    subtitle:'Grey zone never auto decided',
-    counters:[
-      {id:'queue', label:'in queue', type:'meanrevert', mean:6, min:0, max:13, vol:1.4, fmt:'int'}
-    ],
-    tooltip:{
-      what:'Holds anything the system is not confident about for a person to decide.',
-      why:'Ambiguous matches never get guessed. A human always makes the final call.'
-    }
+  function setSidebarCollapsed(collapsed){
+    if(isMobile()) return;
+    sidebar.classList.toggle('collapsed', collapsed);
+    localStorage.setItem(STORAGE_COLLAPSED, collapsed ? '1' : '0');
   }
-];
 
-var STAGE_IDS = ['n1','n2','n3','n4','n5','n6','n7'];
-var STAGGER_ORDER = ['orchestrator','n2','n3','n4','n5','n6','n7'];
-
-var CONNECTIONS = [
-  {id:'m1', from:'n1', to:'n2', kind:'main', density:'dense'},
-  {id:'m2', from:'n2', to:'n3', kind:'main', density:'dense'},
-  {id:'m3', from:'n3', to:'n4', kind:'main', density:'medium'},
-  {id:'m4', from:'n4', to:'n5', kind:'main', density:'medium'},
-  {id:'m5', from:'n5', to:'n6', kind:'main', density:'medium'},
-  {id:'m6', from:'n6', to:'n7', kind:'main', density:'medium'},
-  {id:'fresh', from:'n7', to:'n2', kind:'freshness'},
-  {from:'orchestrator', to:'n1', kind:'control', idx:0},
-  {from:'orchestrator', to:'n2', kind:'control', idx:1},
-  {from:'orchestrator', to:'n3', kind:'control', idx:2},
-  {from:'orchestrator', to:'n4', kind:'control', idx:3},
-  {from:'orchestrator', to:'n5', kind:'control', idx:4},
-  {from:'orchestrator', to:'n6', kind:'control', idx:5},
-  {from:'orchestrator', to:'n7', kind:'control', idx:6},
-  {from:'n4', to:'review', kind:'branchDown'},
-  {from:'review', to:'n4', kind:'branchUp'}
-];
-
-/* ---------- proposal territory: board content (verbatim, see EDIT_PROMPT §4) ----------
-   act 0 = the opening plate, 1 = Act One "who we are", 2 = Act Two "the work".
-   onDemand boards are on the canvas but skipped by arrow-key stepping; they
-   are reached only by clicking (and are positioned as branches off their
-   branchFrom board). detail is a single panel paragraph; detailList is an
-   ordered set of short panel items (six guarantees, four phases). tiles/cards
-   are always-on-surface content (the two boards that deliberately break the
-   "headline+sub+<=2 lines" rule); lines are gated by the Overview/Full-Detail
-   toggle exactly like a workflow node's minor content. */
-var BOARDS = [
-  { id:'open', act:0,
-    headline:'Sovereign Ops AI',
-    sub:'Systems that know when they are unsure.'
-  },
-
-  { id:'why', act:1,
-    headline:'Why we do what we do?',
-    sub:'We want to help companies stabilize their routine operations, and help them scale without involving too much resource — Money, Time, Human Resource, and Management. We simply help you remove a few of these constraints, like Human Resource, Time, and Management, so that you can scale and grow faster than any business in your competition.'
-  },
-  { id:'how', act:1,
-    headline:'How we do what we do?',
-    sub:'We use open-source LLMs which are highly token-efficient, and along with that we produce a high-efficiency brain — or you can say algorithms — which reduces the LLM\'s token consumption, so that AI can actually help you instead of increasing your usage bill.'
-  },
-  { id:'what', act:1,
-    headline:'What do we do?',
-    sub:'We intend to create high-accuracy automated workflows which require very little human interaction, and because of that, work efficiency and volume get increased by a noticeable difference.'
-  },
-  { id:'proof', act:1, wide:true,
-    headline:'Three systems running in production today.',
-    sub:'Different industries. The same discipline.',
-    cards:[
-      { title:'Document classification at scale',
-        line:'Printed physical records, classified by machine, corrected by exception.',
-        detail:'Built for a B2B provider whose business is document classification services. Printed records are digitised, then classified by our engine. Where a page is degraded and the engine is not confident, a heavier model is called. Where that model is still not confident, it goes to a person. Volume runs into the millions of records, and the human sees only the exceptions.' },
-      { title:'Inbound email and document handling',
-        line:'Classified, filed, and answered in three to five minutes.',
-        detail:'Incoming email and the documents attached to it are classified, attached to the correct account, and answered. Reply out in three to five minutes. The team doing this work went from fifteen people to two, and the two are handling exceptions rather than volume.' },
-      { title:'Retrieval assistant over a regulated document set',
-        line:'A question in plain language, answered from the right documents.',
-        detail:'Serving banks. A user asks in plain language, the system retrieves the correct documents from a very large corpus, and the answer is grounded in what it retrieved rather than generated from memory.' }
-    ]
-  },
-
-  { id:'problem', act:2,
-    headline:'The problem we\'re solving.', // DRAFT headline - Claude wrote this, Aakash approves/replaces
-    sub:'The constraint isn\'t how much outreach goes out — it\'s what it\'s going out to.',
-    lines:['Thousands of active accounts, incomplete.','Tens of thousands more behind them, untouched.']
-  },
-  { id:'solution', act:2,
-    headline:'One automated flow across every source of truth.',
-    sub:'We connect the platforms that hold the data and run a single end-to-end workflow across them — enrich, verify, match, write back.',
-    lines:['A human steps in exactly where the machine is unsure.']
-  },
-  { id:'complexity', act:2,
-    headline:'Why this is hard — and why that\'s the point.',
-    sub:'Massive data, held to a high-accuracy bar, at speed.',
-    lines:['The heavy lifting runs on an efficient backend — not on the model.','The LLM only orchestrates: it supervises, checks, and keeps every step on plan.'],
-    detail:'Sources per country, each with its own format and failures. Identity resolution against tens of thousands of existing accounts. Verification tiers, deduplication, retry and failure paths for every external call, write-back safety, a full audit trail on every field. This is why it runs to a large custom backend rather than a model doing everything — a consequence of the accuracy bar, not an ambition.'
-  },
-  { id:'impact', act:2, wide:true,
-    headline:'What it costs by hand — and what changes when you don\'t.',
-    sub:'The same work, two ways.',
-    cards:[
-      { title:'Without an automated workflow',
-        line:'The active pool alone: about 4 people for 2–4 months.',
-        detail:'At roughly 15–25 accounts enriched per person per 8-hour day, a 3–5k active pool takes around 4 people 2 to 4 months — on the order of €30–60k in salary — for a single pass. The full 50k would take about 5 people close to two years and several hundred thousand euros — and at 2–3% monthly decay, the earliest records are stale before the last are reached. By hand, the 50k is never actually finished.' },
-      { title:'With the automated workflow',
-        line:'The active pool: about 7–10 days, one person in the loop.',
-        detail:'The same engine clears the 3–5k active pool in roughly 7–10 days of 8-hour shifts with a single person reviewing only the exceptions. Larger batches run continuously in the background — a full 50k pass measured in weeks, not years, still one to two people on exceptions.' }
-    ]
-  },
-  { id:'options', act:2, wide:true,
-    headline:'Three ways to build this.',
-    sub:'Same engine underneath. Different appetite.',
-    cards:[
-      { title:'Enrich the active pool',
-        line:'Your 3–5k active accounts, complete and verified. The immediate win.',
-        detail:'A single enrichment pass over the accounts that are active and important right now. The fastest path to a pipeline you can trust.' },
-      { title:'Enrich the whole database',
-        line:'All 50k at once. Possible — but you pay to enrich data that goes stale before you use it.',
-        detail:'We can build this. We don\'t recommend it: enriching fifty thousand accounts in one push means paying to research records you may never contact, and decay erodes the earliest ones before the run completes.' },
-      { title:'An intelligent system · recommended',
-        line:'Enriches on command, or automatically as the need arises.',
-        detail:'The system decides when to pull more accounts from the inactive pool, and which accounts in the 50k are worth enriching now — so you only ever pay to enrich what you are about to use. The active pool stays complete without anyone deciding, batch by batch, what to work next.',
-        recommended:true }
-    ]
-  },
-  { id:'safety', act:2, onDemand:true, branchFrom:'complexity',
-    headline:'Nothing we do can damage what is already in Salesforce.',
-    sub:'Six guarantees, and a sandbox before any of them are tested on you.',
-    detailList:[
-      'Never overwrite — machine data lands in its own fields. Native fields are filled only when empty, and only if that is switched on.',
-      'Never duplicate — every write is an update keyed on a unique ID. Running a job twice changes nothing the second time.',
-      'Never guess — anything ambiguous goes to a human queue, not into the CRM.',
-      'Always traceable — every field carries where it came from and when.',
-      'Always previewable — every run produces a full diff before it writes a single byte.',
-      'Always reversible — any batch rolls back with one command.',
-      'We start against a sandbox or an export. Not the live org.'
-    ]
-  },
-  { id:'bridge', act:2,
-    headline:'This is what it looks like.',
-    sub:'The system, running.'
+  function closeMobileSidebar(){
+    sidebar.classList.remove('open');
+    backdrop.classList.remove('show');
   }
-];
 
-var BOARD_BY_ID = {};
-BOARDS.forEach(function(b){ BOARD_BY_ID[b.id] = b; });
-var STEP_BOARDS = BOARDS.filter(function(b){ return !b.onDemand; }); // arrow-key stepping order, onDemand skipped
-
-/* chain = spine order (act-separator + branch edges flagged); onDemand
-   boards get their own branch edge from their branchFrom anchor.
-   NOTE on 'what': the edit prompt's board list carries 'what' on the reading
-   spine (open/why/how/what/proof/...) but its own literal BOARD_EDGES list
-   jumped straight from how->proof, which would have left 'what' with no
-   edge at all - contradicting that same prompt's "no board and no edge may
-   dangle" rule one paragraph up. Resolved by splitting how->proof into
-   how->what->what->proof, which is the only change from the prompt's literal
-   edge list; every other edge below is exactly as given. */
-var BOARD_EDGES = [
-  {from:'open', to:'why', wide:true},
-  {from:'why', to:'how'},
-  {from:'how', to:'what'},
-  {from:'what', to:'proof'},
-  {from:'proof', to:'problem', actSeparator:true, wide:true},
-  {from:'problem', to:'solution'},
-  {from:'solution', to:'complexity'},
-  {from:'complexity', to:'impact'},
-  {from:'impact', to:'options'},
-  {from:'options', to:'bridge'},
-  {from:'complexity', to:'safety', branch:true}
-];
-
-/* ---------- runtime state ---------- */
-var running = true;
-var minorMode = false;
-var simTime = LOOP_DUR * 0.30;
-var lastFrameTs = null;
-var frameCount = 0;
-var orchAngle = 0;
-var spinArcEl = null;
-var modeVersion = 0;
-var currentTooltipNode = null;
-var ttTimer = null;
-var hlIndex = {};
-var pinnedNode = null;
-var pinnedEl = null;
-var panelTimer = null;
-
-var zoom = 1, panX = 0, panY = 0;
-var isDragging = false, dragMoved = false;
-var dragStartClientX = 0, dragStartClientY = 0, dragStartPanX = 0, dragStartPanY = 0;
-
-var CURRENT_TERRITORY = 'workflow';
-var TRAVEL_MS = 900;
-var travelAnim = null;
-var lastBoard = null;
-var PROPOSAL_BASE_ZOOM = 0.5;  // default proposal zoom (50%); Aakash raises it manually from the zoom bar
-var focusSaved = null;   // {zoom,panX,panY} captured just before clicking INTO a board; restored on click-outside so the base zoom persists across boards
-var bridgeTimer = null;  // pending bridge -> workflow handoff (click bridge, zoom in, then travel to the live workflow)
-function clearBridgeTimer(){ if(bridgeTimer){ clearTimeout(bridgeTimer); bridgeTimer = null; } }
-var boardHeights = {};
-var boardEdgeEls = {};
-var boardEdgeEmitters = {};
-var bridgeGutterEmitter = null;
-
-var NODE_BY_ID = {};
-var nodeHeights = {};
-var counterState = {};
-var nodeActiveState = {};
-var flashUntil = {};
-var pipeGroups = {};
-var controlPaths = {};
-var controlEmitters = {};
-var branchGroup = null, branchUpGroup = null;
-var branchDownEmitter = null, branchUpEmitter = null;
-
-/* ---------- small utilities ---------- */
-function randRange(a,b){ return a + Math.random()*(b-a); }
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, function(ch){
-    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
-  });
-}
-function fmtCounter(c, v){
-  switch(c.fmt){
-    case 'int': return String(Math.round(v));
-    case 'int-comma': return Math.round(v).toLocaleString('en-US');
-    case 'pct0': return Math.round(v)+'%';
-    case 'pct1': return v.toFixed(1)+'%';
-    case 'dec1': return v.toFixed(1);
-    default: return String(v);
-  }
-}
-function smoothPath(x1,y1,x2,y2){
-  var dx = x2-x1, dy = y2-y1;
-  if(Math.abs(dx) >= Math.abs(dy)){
-    var c = dx*0.5;
-    return 'M'+x1+','+y1+' C'+(x1+c)+','+y1+' '+(x2-c)+','+y2+' '+x2+','+y2;
-  } else {
-    var c2 = dy*0.5;
-    return 'M'+x1+','+y1+' C'+x1+','+(y1+c2)+' '+x2+','+(y2-c2)+' '+x2+','+y2;
-  }
-}
-function lowArcPath(x1,y1,x2,y2,dipY){
-  return 'M'+x1+','+y1+' C'+x1+','+dipY+' '+x2+','+dipY+' '+x2+','+y2;
-}
-
-/* ---------- generic one-shot emitted-particle stream (control lines, review branch) ---------- */
-function makeEmitter(path, len, group, colorClass){
-  var list = [];
-  return {
-    spawn: function(speed, reverse){
-      var c = document.createElementNS(NS,'circle');
-      c.setAttribute('class','particle'+(colorClass?(' '+colorClass):''));
-      c.setAttribute('r',3.2);
-      group.appendChild(c);
-      list.push({t:0, speed:speed, reverse:!!reverse, el:c});
-    },
-    update: function(dt, onArrive){
-      for(var i=list.length-1;i>=0;i--){
-        var p = list[i];
-        p.t += p.speed*dt;
-        if(p.t>=1){
-          if(onArrive) onArrive();
-          p.el.remove();
-          list.splice(i,1);
-          continue;
-        }
-        var sampleT = p.reverse ? (1-p.t) : p.t;
-        var pt = path.getPointAtLength(sampleT*len);
-        p.el.setAttribute('cx', pt.x);
-        p.el.setAttribute('cy', pt.y);
-        var op = 1;
-        if(p.t<0.15) op = p.t/0.15; else if(p.t>0.85) op = (1-p.t)/0.15;
-        p.el.setAttribute('opacity', op);
-      }
-    },
-    count: function(){ return list.length; }
-  };
-}
-
-/* ---------- layout ---------- */
-function layoutNodes(){
-  STAGE_IDS.forEach(function(id, i){
-    var n = NODE_BY_ID[id];
-    n.x = WORKFLOW_OFFSET_X + CANVAS_PAD + i*(NODE_W+GAP_X);
-    n.y = ROW_Y;
-    n.w = NODE_W;
-  });
-  var orch = NODE_BY_ID.orchestrator;
-  orch.x = ORCH_X; orch.y = ORCH_Y; orch.w = ORCH_W;
-  var rev = NODE_BY_ID.review;
-  rev.x = REVIEW_X; rev.y = ROW_Y + MAJOR_H_EST + ROW_TO_REVIEW_GAP_MIN; rev.w = REVIEW_W;
-}
-
-/* Board x/w are fixed constants (only height is content-measured, same
-   discipline as workflow nodes where NODE_W/ORCH_W/REVIEW_W are fixed and
-   only height is measured). Spine boards share one center X; 'bridge' is
-   pushed to the territory's right edge (closest to the gutter, pointing
-   right); onDemand boards sit in the reserved left margin, branching off
-   their branchFrom anchor. Y is provisional here, corrected in
-   finalizeBoardLayout() once real heights are known. */
-function layoutBoards(){
-  BOARDS.forEach(function(b){
-    b.w = b.wide ? BOARD_CARDS_W : BOARD_W;
-    if(b.onDemand){
-      b.x = SPINE_LEFT_X - BRANCH_GAP_X - b.w;
+  function toggleSidebar(){
+    if(isMobile()){
+      var open = sidebar.classList.toggle('open');
+      backdrop.classList.toggle('show', open);
     } else {
-      // every spine board (bridge included) is centred on the spine, so its
-      // incoming edge is a clean straight vertical connector - no dangling
-      // diagonal off to the side.
-      b.x = SPINE_CENTER_X - b.w/2;
+      setSidebarCollapsed(!sidebar.classList.contains('collapsed'));
     }
-    b.y = 0;
-  });
-}
-
-/* Node height is intrinsic (content-driven), so every gap below is enforced
-   against REAL measured heights (major AND full-detail-expanded), never a
-   guessed constant. Positions are computed once here, then never moved
-   again - this is what makes the canvas a genuinely fixed pixel layout. */
-function measureNodeHeights(){
-  NODES.forEach(function(n){
-    var el = document.getElementById('node-'+n.id);
-    if(!el) return;
-    var headerH = el.offsetHeight;
-    var expandedExtra = 0;
-    if(n.minor){
-      var wrap = document.getElementById('minorwrap-'+n.id);
-      renderMinorContent(n, wrap);
-      expandedExtra = wrap.scrollHeight;
-      wrap.innerHTML = '';
-    }
-    nodeHeights[n.id] = { header: headerH, expanded: headerH + expandedExtra };
-  });
-}
-
-/* Same discipline as measureNodeHeights(): every board's real DOM height is
-   measured in both Overview and Full-Detail state before any Y position is
-   computed - never a guessed gap constant. */
-function measureBoardHeights(){
-  BOARDS.forEach(function(b){
-    var el = document.getElementById('board-'+b.id);
-    if(!el) return;
-    var headerH = el.offsetHeight;
-    var expandedExtra = 0;
-    if(b.lines){
-      var wrap = document.getElementById('boardlines-'+b.id);
-      renderBoardLines(b, wrap);
-      expandedExtra = wrap.scrollHeight;
-      wrap.innerHTML = '';
-    }
-    boardHeights[b.id] = { header: headerH, expanded: headerH + expandedExtra };
-  });
-}
-
-/* Lays out the vertical spine (open -> ... -> bridge, wider gap at the act
-   separator between team/need), then the onDemand branch boards stacked off
-   their branchFrom anchor. Returns the total height the proposal territory
-   needs, so finalizeLayout() can take CANVAS_H as the max of both
-   territories' real requirements. */
-function finalizeBoardLayout(){
-  measureBoardHeights();
-
-  var y = CANVAS_PAD;
-  STEP_BOARDS.forEach(function(b, i){
-    b.y = y;
-    b.h = Math.max(boardHeights[b.id].header, boardHeights[b.id].expanded);
-    var el = document.getElementById('board-'+b.id);
-    if(el) el.style.top = b.y+'px';
-    var next = STEP_BOARDS[i+1];
-    if(next){
-      // wide gap wherever the connecting BOARD_EDGES entry is flagged wide
-      // (open->why and the act-separator edge) - driven by the edge data,
-      // never a hardcoded pair of board ids, so a future board-set swap
-      // doesn't have to remember to update this too.
-      var edge = BOARD_EDGES.filter(function(e){ return e.from===b.id && e.to===next.id; })[0];
-      var gap = (edge && edge.wide) ? BOARD_GAP_Y_WIDE : BOARD_GAP_Y;
-      y = b.y + b.h + gap;
-    }
-  });
-
-  var branchY = {}; // running Y offset per branchFrom anchor, so a stack of >1 branch boards never overlaps
-  BOARDS.filter(function(b){ return b.onDemand; }).forEach(function(b){
-    var anchor = BOARD_BY_ID[b.branchFrom];
-    b.h = Math.max(boardHeights[b.id].header, boardHeights[b.id].expanded);
-    b.y = branchY.hasOwnProperty(b.branchFrom) ? branchY[b.branchFrom] : anchor.y;
-    branchY[b.branchFrom] = b.y + b.h + BRANCH_GAP_Y;
-    var el = document.getElementById('board-'+b.id);
-    if(el) el.style.top = b.y+'px';
-  });
-
-  var maxBottom = 0;
-  BOARDS.forEach(function(b){ maxBottom = Math.max(maxBottom, b.y + b.h); });
-  return maxBottom + PROPOSAL_PAD;
-}
-
-function finalizeLayout(){
-  measureNodeHeights();
-
-  var orch = NODE_BY_ID.orchestrator;
-  ROW_Y = orch.y + Math.max(nodeHeights.orchestrator.header, nodeHeights.orchestrator.expanded) + ORCH_TO_ROW_GAP_MIN;
-  STAGE_IDS.forEach(function(id){
-    var n = NODE_BY_ID[id];
-    n.y = ROW_Y;
-    var el = document.getElementById('node-'+id);
-    if(el) el.style.top = ROW_Y+'px';
-  });
-
-  var n4 = NODE_BY_ID.n4;
-  var n4Bottom = n4.y + Math.max(nodeHeights.n4.header, nodeHeights.n4.expanded);
-  var review = NODE_BY_ID.review;
-  review.y = n4Bottom + ROW_TO_REVIEW_GAP_MIN;
-  var revEl = document.getElementById('node-review');
-  if(revEl) revEl.style.top = review.y+'px';
-
-  var engineBottom = 0;
-  ENGINE_IDS.forEach(function(id){ engineBottom = Math.max(engineBottom, ROW_Y + nodeHeights[id].expanded); });
-  ENGINE_RECT = {
-    left: Math.min(orch.x, NODE_BY_ID.n3.x) - 24,
-    right: Math.max(orch.x+orch.w, NODE_BY_ID.n6.x+NODE_BY_ID.n6.w) + 24,
-    top: orch.y - 24,
-    bottom: engineBottom + 24
-  };
-
-  var reviewBottom = review.y + nodeHeights.review.header; // Human Review has no minor, height is constant
-  FRESHNESS_DIP_Y = reviewBottom + 45;
-
-  var maxBottom = Math.max(reviewBottom, FRESHNESS_DIP_Y);
-  STAGE_IDS.concat(['orchestrator']).forEach(function(id){
-    maxBottom = Math.max(maxBottom, NODE_BY_ID[id].y + nodeHeights[id].expanded);
-  });
-  var workflowH = maxBottom + CANVAS_PAD;
-
-  var proposalH = finalizeBoardLayout();
-
-  CANVAS_H = Math.max(workflowH, proposalH);
-  document.getElementById('canvasInner').style.height = CANVAS_H+'px';
-}
-
-/* ---------- build: orchestrator background glow ---------- */
-function buildOrchGlow(){
-  var div = document.createElement('div');
-  div.className = 'orch-glow';
-  var gw = ORCH_W*1.7, gh = 130*2.6;
-  div.style.left = (ORCH_X+ORCH_W/2-gw/2)+'px';
-  div.style.top = (ORCH_Y+65-gh/2)+'px';
-  div.style.width = gw+'px';
-  div.style.height = gh+'px';
-  var inner = document.getElementById('canvasInner');
-  inner.insertBefore(div, inner.firstChild);
-}
-
-/* ---------- build: engine core enclosure ---------- */
-function buildEngineCoreVisual(){
-  var svg = document.getElementById('pipesSvg');
-  var rect = document.createElementNS(NS,'rect');
-  rect.setAttribute('class','engine-core-rect');
-  rect.setAttribute('x', ENGINE_RECT.left);
-  rect.setAttribute('y', ENGINE_RECT.top);
-  rect.setAttribute('width', ENGINE_RECT.right-ENGINE_RECT.left);
-  rect.setAttribute('height', ENGINE_RECT.bottom-ENGINE_RECT.top);
-  rect.setAttribute('rx', 18);
-  rect.setAttribute('ry', 18);
-  svg.appendChild(rect);
-
-  var label = document.createElement('div');
-  label.className = 'engine-core-label';
-  label.textContent = 'Engine core · where accuracy is made';
-  label.style.left = (ENGINE_RECT.left+16)+'px';
-  label.style.top = (ENGINE_RECT.top+10)+'px';
-  document.getElementById('nodesLayer').appendChild(label);
-}
-
-/* ---------- build: node DOM ---------- */
-function buildNodes(){
-  var layer = document.getElementById('nodesLayer');
-  NODES.forEach(function(n){
-    var el = document.createElement('div');
-    var cls = 'node' + (n.kind==='orch'?' orch':'') + (n.kind==='review'?' review':'');
-    if(ENGINE_IDS.indexOf(n.id)!==-1) cls += ' engine';
-    el.className = cls;
-    el.id = 'node-'+n.id;
-    el.style.left = n.x+'px';
-    el.style.top = n.y+'px';
-    el.style.width = n.w+'px';
-
-    var header = document.createElement('div');
-    header.className = 'node-header';
-
-    if(n.kind==='orch'){
-      header.innerHTML =
-        '<div class="orch-title-row">'+
-          '<span class="spinner" id="spin-'+n.id+'"><svg viewBox="0 0 22 22" width="22" height="22">'+
-            '<circle class="spin-track" cx="11" cy="11" r="9"></circle>'+
-            '<circle class="spin-arc" cx="11" cy="11" r="9"></circle>'+
-          '</svg></span>'+
-          '<span class="node-title">'+escapeHtml(n.title)+'</span>'+
-        '</div>'+
-        '<div class="node-subtitle">'+escapeHtml(n.subtitle)+'</div>';
-    } else {
-      header.innerHTML =
-        '<div class="node-title">'+escapeHtml(n.title)+'</div>'+
-        '<div class="node-subtitle">'+escapeHtml(n.subtitle)+'</div>';
-    }
-
-    var countersDiv = document.createElement('div');
-    countersDiv.className = 'counters';
-    (n.counters||[]).forEach(function(c){
-      var cEl = document.createElement('div');
-      cEl.className = 'counter';
-      cEl.innerHTML =
-        '<div class="counter-label">'+escapeHtml(c.label)+'</div>'+
-        '<div class="counter-value" id="cv-'+n.id+'-'+c.id+'">-</div>'+
-        (c.bar ? '<div class="bar-track"><div class="bar-fill" id="bar-'+n.id+'-'+c.id+'"></div></div>' : '');
-      countersDiv.appendChild(cEl);
-    });
-    header.appendChild(countersDiv);
-    el.appendChild(header);
-
-    if(n.minor){
-      var wrap = document.createElement('div');
-      wrap.className = 'minor-wrap';
-      wrap.id = 'minorwrap-'+n.id;
-      el.appendChild(wrap);
-    }
-
-    el.addEventListener('mouseenter', function(){ showTooltip(n, el); });
-    el.addEventListener('mouseleave', hideTooltip);
-    el.addEventListener('click', function(e){ e.stopPropagation(); openPanel(n); });
-
-    layer.appendChild(el);
-  });
-}
-
-/* ---------- build: proposal board DOM ----------
-   Boards carry class "node" so they inherit the exact same chrome
-   (background/border/radius/glow/.selected transform) as workflow nodes for
-   free - "same palette, same corner radius, same border and glow treatment"
-   per the edit prompt, achieved by reuse rather than a parallel style set. */
-function renderBoardLines(b, wrap){
-  if(!b.lines) return;
-  var html = '<div class="board-lines-inner"><ul class="board-lines">';
-  b.lines.forEach(function(item){
-    html += '<li><span class="dot"></span><span class="txt">'+escapeHtml(item)+'</span></li>';
-  });
-  html += '</ul></div>';
-  wrap.innerHTML = html;
-}
-
-function buildBoards(){
-  var layer = document.getElementById('boardsLayer');
-  BOARDS.forEach(function(b){
-    var el = document.createElement('div');
-    el.className = 'node board' + (b.onDemand ? ' board-ondemand' : '');
-    el.id = 'board-'+b.id;
-    el.style.left = b.x+'px';
-    el.style.top = '0px';
-    el.style.width = b.w+'px';
-
-    var html = '<div class="board-headline">'+escapeHtml(b.headline)+'</div>'+
-                '<div class="board-sub">'+escapeHtml(b.sub)+'</div>';
-    el.innerHTML = html;
-
-    if(b.lines){
-      var wrap = document.createElement('div');
-      wrap.className = 'board-lines-wrap';
-      wrap.id = 'boardlines-'+b.id;
-      el.appendChild(wrap);
-    }
-
-    if(b.cards){
-      var cardsWrap = document.createElement('div');
-      cardsWrap.className = 'board-cards';
-      b.cards.forEach(function(card, i){
-        card._domId = b.id+'-c'+i;
-        var cEl = document.createElement('div');
-        cEl.className = 'node board-card' + (card.recommended ? ' recommended' : '');
-        cEl.id = 'card-'+card._domId;
-        cEl.innerHTML = '<div class="board-card-title">'+escapeHtml(card.title)+'</div>'+
-                         '<div class="board-card-line">'+escapeHtml(card.line)+'</div>';
-        cEl.addEventListener('click', function(e){ e.stopPropagation(); onCardClick(card, b); });
-        cardsWrap.appendChild(cEl);
-      });
-      el.appendChild(cardsWrap);
-    }
-
-    if(b.tiles){
-      var tilesWrap = document.createElement('div');
-      tilesWrap.className = 'board-tiles';
-      b.tiles.forEach(function(t){
-        var tEl = document.createElement('div');
-        tEl.className = 'board-tile';
-        tEl.textContent = t;
-        tilesWrap.appendChild(tEl);
-      });
-      el.appendChild(tilesWrap);
-    }
-
-    el.addEventListener('click', function(e){ e.stopPropagation(); onBoardClick(b); });
-
-    layer.appendChild(el);
-  });
-}
-
-/* ---------- build: SVG defs (arrowheads) ---------- */
-function buildSvgDefs(){
-  var svg = document.getElementById('pipesSvg');
-  var defs = document.createElementNS(NS,'defs');
-  defs.innerHTML =
-    '<marker id="mArrowMain" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" class="arrow-fill-main"></path></marker>'+
-    '<marker id="mArrowReview" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" class="arrow-fill-review"></path></marker>';
-  svg.appendChild(defs);
-}
-
-/* ---------- build: SVG pipes, control lines, branches, freshness loop ---------- */
-function buildPipesSvg(){
-  var svg = document.getElementById('pipesSvg');
-  svg.setAttribute('viewBox', '0 0 '+CANVAS_W+' '+CANVAS_H);
-  svg.setAttribute('width', CANVAS_W);
-  svg.setAttribute('height', CANVAS_H);
-  var rowAnchorY = ROW_Y + MAJOR_H_EST/2;
-
-  CONNECTIONS.forEach(function(conn){
-    var from = NODE_BY_ID[conn.from], to = NODE_BY_ID[conn.to];
-    var g = document.createElementNS(NS,'g');
-    var x1,y1,x2,y2, custom = null;
-
-    if(conn.kind==='main'){
-      g.setAttribute('class','pipe');
-      x1 = from.x+from.w; y1 = rowAnchorY;
-      x2 = to.x; y2 = rowAnchorY;
-    } else if(conn.kind==='freshness'){
-      g.setAttribute('class','pipe freshness');
-      x1 = from.x+from.w*0.5; y1 = ROW_Y + MAJOR_H_EST*0.95;
-      x2 = to.x+to.w*0.5; y2 = ROW_Y + MAJOR_H_EST*0.95;
-      custom = lowArcPath(x1,y1,x2,y2,FRESHNESS_DIP_Y);
-    } else if(conn.kind==='control'){
-      g.setAttribute('class','control');
-      x1 = ORCH_X + (conn.idx+0.5)*(ORCH_W/7); y1 = ORCH_Y+Math.max(nodeHeights.orchestrator.header,1);
-      x2 = to.x + to.w/2; y2 = ROW_Y;
-    } else if(conn.kind==='branchDown'){
-      g.setAttribute('class','branch');
-      x1 = from.x+from.w; y1 = ROW_Y + MAJOR_H_EST*0.7;
-      x2 = to.x + to.w/2; y2 = to.y;
-    } else if(conn.kind==='branchUp'){
-      g.setAttribute('class','branch');
-      x1 = from.x + from.w*0.28; y1 = from.y;
-      x2 = to.x; y2 = ROW_Y + MAJOR_H_EST*0.85;
-    }
-
-    var path = document.createElementNS(NS,'path');
-    path.setAttribute('d', custom || smoothPath(x1,y1,x2,y2));
-    g.appendChild(path);
-    svg.appendChild(g);
-
-    if(conn.kind==='main' || conn.kind==='freshness'){
-      var len = path.getTotalLength();
-      var isFresh = conn.kind==='freshness';
-      var count = isFresh ? 3 : (conn.density==='dense' ? 6 : 4);
-      var speedRange = isFresh ? [0.035*SIM_SPEED,0.05*SIM_SPEED] : [0.09*SIM_SPEED,0.15*SIM_SPEED];
-      var particles = [];
-      for(var i=0;i<count;i++){
-        var c = document.createElementNS(NS,'circle');
-        c.setAttribute('class','particle');
-        c.setAttribute('r',3.2);
-        g.appendChild(c);
-        particles.push({t: i/count, speed: randRange(speedRange[0],speedRange[1]), el:c});
-      }
-      conn._path = path; conn._len = len; conn._particles = particles;
-      pipeGroups[conn.id] = g;
-      if(isFresh){
-        path.setAttribute('marker-end','url(#mArrowMain)');
-        var midX = (x1+x2)/2;
-        var lbl = document.createElement('div');
-        lbl.className = 'freshness-label';
-        lbl.textContent = 'Freshness loop · re-verify';
-        lbl.style.left = midX+'px';
-        lbl.style.top = (FRESHNESS_DIP_Y+6)+'px';
-        document.getElementById('nodesLayer').appendChild(lbl);
-      }
-    } else if(conn.kind==='control'){
-      path.setAttribute('marker-end','url(#mArrowMain)');
-      path.setAttribute('marker-start','url(#mArrowMain)');
-      controlPaths[conn.to] = g;
-      controlEmitters[conn.to] = makeEmitter(path, path.getTotalLength(), g, null);
-    } else if(conn.kind==='branchDown'){
-      path.setAttribute('marker-end','url(#mArrowReview)');
-      branchGroup = g;
-      branchDownEmitter = makeEmitter(path, path.getTotalLength(), g, null);
-    } else if(conn.kind==='branchUp'){
-      path.setAttribute('marker-end','url(#mArrowReview)');
-      branchUpGroup = g;
-      branchUpEmitter = makeEmitter(path, path.getTotalLength(), g, null);
-    }
-  });
-}
-
-/* ---------- build: proposal board edges (spine chain + branches + act
-   separator rule + the bridge's fading gutter edge) ----------
-   No ambient flow here by design (motion doctrine is the opposite of the
-   workflow's) - each edge gets exactly one emitter, fired once when its
-   destination board becomes the centred board. See spawnEdgeParticlesInto(). */
-function buildBoardEdgesSvg(){
-  var svg = document.getElementById('pipesSvg');
-
-  BOARD_EDGES.forEach(function(edge){
-    var from = BOARD_BY_ID[edge.from], to = BOARD_BY_ID[edge.to];
-    var g = document.createElementNS(NS,'g');
-    g.setAttribute('class', 'board-edge' + (edge.branch ? ' branch' : ''));
-    var x1 = from.x + from.w/2, y1 = from.y + from.h;
-    var x2 = to.x + to.w/2, y2 = to.y;
-    if(edge.branch){ x1 = from.x; y1 = from.y + from.h*0.4; x2 = to.x + to.w; y2 = to.y + to.h/2; }
-    var path = document.createElementNS(NS,'path');
-    path.setAttribute('d', smoothPath(x1,y1,x2,y2));
-    g.appendChild(path);
-    svg.appendChild(g);
-    boardEdgeEls[edge.to] = g;
-    boardEdgeEmitters[edge.to] = makeEmitter(path, path.getTotalLength(), g, null);
-  });
-
-  // act separator: a subtle orange rule at the midpoint of whichever edge
-  // carries actSeparator:true - driven by the edge data, not a hardcoded
-  // pair of board ids (see the matching note in finalizeBoardLayout()).
-  var sepEdge = BOARD_EDGES.filter(function(e){ return e.actSeparator; })[0];
-  var sepFrom = BOARD_BY_ID[sepEdge.from], sepTo = BOARD_BY_ID[sepEdge.to];
-  var ruleY = (sepFrom.y + sepFrom.h + sepTo.y) / 2;
-  var rule = document.createElementNS(NS,'line');
-  rule.setAttribute('x1', SPINE_LEFT_X);
-  rule.setAttribute('x2', SPINE_LEFT_X + PROPOSAL_SPINE_W);
-  rule.setAttribute('y1', ruleY);
-  rule.setAttribute('y2', ruleY);
-  rule.style.stroke = 'var(--orange)';
-  rule.setAttribute('stroke-opacity', '0.28');
-  rule.setAttribute('stroke-width', '1');
-  svg.appendChild(rule);
-
-  // (Removed the old decorative "gutter fade" edge that ran right from the
-  // bridge board into empty space and connected to nothing - it read as a
-  // broken/loose endpoint. The bridge->workflow handoff is now a click action
-  // on the bridge board, not a dangling line. bridgeGutterEmitter stays null;
-  // every use of it is null-guarded.)
-}
-
-/* ---------- counters ---------- */
-function initCounters(){
-  NODES.forEach(function(n){
-    (n.counters||[]).forEach(function(c){
-      var key = n.id+'.'+c.id;
-      var v;
-      if(c.type==='cumulative') v = c.seed;
-      else if(c.type==='fixed') v = c.value;
-      else v = c.mean;
-      counterState[key] = { value:v, cfg:c, nodeId:n.id, _easeFrom:null };
-    });
-  });
-}
-
-function updateCounters(dt){
-  var loopPhase = (simTime % LOOP_DUR) / LOOP_DUR;
-  var easeStart = 1 - EASE_WINDOW/LOOP_DUR;
-  var inEase = loopPhase >= easeStart;
-  Object.keys(counterState).forEach(function(key){
-    var st = counterState[key];
-    var c = st.cfg;
-    if(c.type==='fixed') return;
-    if(c.type==='gauge' || c.type==='meanrevert'){
-      var reversion = c.type==='meanrevert' ? 0.55 : 0.2;
-      var drift = (c.mean - st.value)*reversion;
-      var noise = (Math.random()-0.5)*2*(c.vol||1);
-      st.value += (drift+noise)*dt;
-      st.value = Math.max(c.min, Math.min(c.max, st.value));
-    } else if(c.type==='cumulative'){
-      if(inEase){
-        if(st._easeFrom===null) st._easeFrom = st.value;
-        var t = Math.min(1, (loopPhase-easeStart)/(1-easeStart));
-        st.value = st._easeFrom + (c.seed - st._easeFrom)*t;
-      } else {
-        st._easeFrom = null;
-        var active = nodeActiveState[st.nodeId];
-        var r = randRange(c.rate[0], c.rate[1]);
-        st.value += (active ? r : r*0.15) * dt;
-      }
-    }
-  });
-}
-
-function renderAllCounters(){
-  Object.keys(counterState).forEach(function(key){
-    var st = counterState[key];
-    var domKey = key.replace('.', '-');
-    var valEl = document.getElementById('cv-'+domKey);
-    if(valEl) valEl.textContent = fmtCounter(st.cfg, st.value);
-    var panelEl = document.getElementById('panelcv-'+domKey);
-    if(panelEl) panelEl.textContent = fmtCounter(st.cfg, st.value);
-    if(st.cfg.bar){
-      var barEl = document.getElementById('bar-'+domKey);
-      if(barEl){
-        var pct = (st.value-st.cfg.min)/(st.cfg.max-st.cfg.min)*100;
-        barEl.style.width = Math.max(0,Math.min(100,pct))+'%';
-      }
-    }
-  });
-}
-
-function bumpReviewQueue(delta){
-  var st = counterState['review.queue'];
-  if(!st) return;
-  st.value = Math.max(st.cfg.min, Math.min(st.cfg.max, st.value+delta));
-}
-
-/* ---------- node activity + flashes + control-line dispatch/report particles ---------- */
-function triggerFlash(nodeId){
-  flashUntil[nodeId] = simTime + 0.5;
-  flashUntil.orchestrator = simTime + 0.35;
-}
-
-function updateNodeActivity(){
-  var loopPhase = (simTime % LOOP_DUR) / LOOP_DUR;
-  STAGE_IDS.forEach(function(id){
-    var n = NODE_BY_ID[id];
-    var w = n.window;
-    var active = !w ? true : (loopPhase>=w[0] && loopPhase<=w[1]);
-    var prev = nodeActiveState[id];
-    if(active && !prev){
-      triggerFlash(id);
-      var eDown = controlEmitters[id];
-      if(eDown) eDown.spawn(randRange(0.5,0.7), false);
-    }
-    if(!active && prev){
-      var eUp = controlEmitters[id];
-      if(eUp) eUp.spawn(randRange(0.5,0.7), true);
-    }
-    nodeActiveState[id] = active;
-    var el = document.getElementById('node-'+id);
-    if(el) el.classList.toggle('active', active);
-  });
-  var orchEl = document.getElementById('node-orchestrator');
-  if(orchEl) orchEl.classList.add('active');
-}
-
-function applyFlashClasses(){
-  Object.keys(controlPaths).forEach(function(id){
-    var on = !!(flashUntil[id] && simTime < flashUntil[id]);
-    controlPaths[id].classList.toggle('flash', on);
-    controlPaths[id].classList.toggle('active', !!nodeActiveState[id] || on);
-  });
-  var spin = document.getElementById('spin-orchestrator');
-  if(spin) spin.classList.toggle('flash', !!(flashUntil.orchestrator && simTime < flashUntil.orchestrator));
-}
-
-function updateControlEmitters(dt){
-  Object.keys(controlEmitters).forEach(function(id){ controlEmitters[id].update(dt); });
-}
-
-/* ---------- orchestrator spinner ---------- */
-function updateOrchestrator(dt){
-  orchAngle = (orchAngle + 110*dt) % 360;
-  if(spinArcEl) spinArcEl.style.transform = 'rotate('+orchAngle+'deg)';
-}
-
-/* ---------- main + freshness pipe particles ---------- */
-function updateParticles(dt){
-  CONNECTIONS.forEach(function(conn){
-    if(conn.kind!=='main' && conn.kind!=='freshness') return;
-    var active = nodeActiveState[conn.from] || nodeActiveState[conn.to];
-    var g = pipeGroups[conn.id];
-    if(g) g.classList.toggle('active', active);
-    if(!active) return;
-    conn._particles.forEach(function(p){
-      p.t += p.speed*dt;
-      if(p.t>1) p.t -= 1;
-      var pt = conn._path.getPointAtLength(p.t*conn._len);
-      p.el.setAttribute('cx', pt.x);
-      p.el.setAttribute('cy', pt.y);
-    });
-  });
-}
-
-/* ---------- Match Engine <-> Human Review, both directions ---------- */
-function updateBranchEmits(dt){
-  var n4active = nodeActiveState.n4;
-  if(n4active && branchDownEmitter.count()<3 && Math.random() < 0.55*dt){
-    branchDownEmitter.spawn(randRange(0.35,0.55));
   }
-  branchDownEmitter.update(dt, function(){ bumpReviewQueue(1); });
 
-  var queueVal = counterState['review.queue'] ? counterState['review.queue'].value : 0;
-  if(queueVal>=1 && branchUpEmitter.count()<2 && Math.random() < 0.4*dt){
-    branchUpEmitter.spawn(randRange(0.3,0.45));
+  function renderCards(){
+    workflowList.innerHTML = '';
+    workflows.forEach(function(wf){
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'wf-card' + (wf.id === activeId ? ' active' : '');
+      btn.dataset.id = wf.id;
+      btn.innerHTML =
+        '<div class="wf-card-inner">' +
+          '<div class="wf-accent" style="background:' + wf.accent + '"></div>' +
+          '<div class="wf-body">' +
+            '<div class="wf-dot" style="background:' + wf.accent + ';display:none"></div>' +
+            '<div class="wf-text">' +
+              '<div class="wf-title">' + esc(wf.title) + '</div>' +
+              '<div class="wf-sub">' + esc(wf.subtitle) + '</div>' +
+              '<div class="wf-client">' + esc(wf.client) + '</div>' +
+              (wf.tags && wf.tags.length ?
+                '<div class="wf-tags">' + wf.tags.map(function(t){
+                  return '<span class="wf-tag">' + esc(t) + '</span>';
+                }).join('') : '') +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      btn.addEventListener('click', function(){ selectWorkflow(wf.id); });
+      workflowList.appendChild(btn);
+    });
+
+    countBadge.textContent = workflows.length + ' workflow' + (workflows.length === 1 ? '' : 's');
+    sidebarCount.textContent = workflows.length + ' available';
   }
-  branchUpEmitter.update(dt, function(){ bumpReviewQueue(-1); });
 
-  if(branchGroup) branchGroup.classList.toggle('active', branchDownEmitter.count()>0 || n4active);
-  if(branchUpGroup) branchUpGroup.classList.toggle('active', branchUpEmitter.count()>0);
-}
-
-/* ---------- "Right now" line ---------- */
-function rightNowText(n){
-  var c = COMPANIES[Math.floor(Math.random()*COMPANIES.length)];
-  switch(n.id){
-    case 'orchestrator': {
-      var targets = ['Demand Discovery','Identity Resolution','Contact Enrichment','Verification'];
-      return 'Routing '+c.name+' to '+targets[Math.floor(Math.random()*targets.length)];
-    }
-    case 'n1':
-      return 'Checked Salesforce for '+c.name+', not on file';
-    case 'n2':
-      return 'Scanning '+c.name+', '+c.zip+' '+c.city;
-    case 'n3':
-      return 'Resolving '+c.name+', '+c.zip+' '+c.city;
-    case 'n4':
-      return 'Matching '+c.name+' against your Salesforce pool';
-    case 'n5':
-      return 'Enriching contacts at '+c.name;
-    case 'n6':
-      return 'Verifying contacts at '+c.name;
-    case 'n7':
-      return 'Writing '+c.name+' to Salesforce';
-    case 'review': {
-      var score = 60+Math.floor(Math.random()*31);
-      return c.name+' waiting for review, score '+score;
-    }
-    default: return '';
-  }
-}
-
-function showTooltip(n, el){
-  currentTooltipNode = n;
-  document.getElementById('ttWhat').textContent = n.tooltip.what;
-  document.getElementById('ttWhy').textContent = n.tooltip.why;
-  document.getElementById('ttNow').textContent = rightNowText(n);
-  var tip = document.getElementById('tooltip');
-  tip.style.display = 'block';
-  positionTooltip(el, tip);
-  clearInterval(ttTimer);
-  ttTimer = setInterval(function(){
-    if(currentTooltipNode===n) document.getElementById('ttNow').textContent = rightNowText(n);
-  }, 2800);
-}
-function hideTooltip(){
-  document.getElementById('tooltip').style.display = 'none';
-  currentTooltipNode = null;
-  clearInterval(ttTimer);
-}
-function positionTooltip(el, tip){
-  var r = el.getBoundingClientRect();
-  var tw = tip.offsetWidth, th = tip.offsetHeight;
-  var left = r.left + r.width/2 - tw/2;
-  var top = r.top - th - 14;
-  if(top < 8){ top = r.bottom + 14; }
-  left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
-  top = Math.max(8, Math.min(top, window.innerHeight - th - 8));
-  tip.style.left = left+'px';
-  tip.style.top = top+'px';
-}
-
-/* ---------- click-to-pin detail panel ---------- */
-function stageTagFor(n){
-  if(n.kind==='orch') return 'Orchestrator';
-  if(n.kind==='review') return 'Human review';
-  var idx = STAGE_IDS.indexOf(n.id);
-  return 'Stage '+(idx+1)+' of '+STAGE_IDS.length;
-}
-
-function clearSelection(){
-  if(pinnedEl){ pinnedEl.classList.remove('selected'); pinnedEl = null; }
-}
-
-function resetPanelSections(){
-  ['dpWhatSection','dpWhySection','dpNowSection','dpCountersSection','dpMinorSection'].forEach(function(id){
-    document.getElementById(id).style.display = 'none';
-  });
-  document.getElementById('dpWhatLabel').style.display = '';
-  document.getElementById('dpMinorLabel').style.display = '';
-}
-
-function openPanel(n){
-  clearSelection();
-  var el = document.getElementById('node-'+n.id);
-  if(el) el.classList.add('selected');
-  pinnedEl = el;
-  pinnedNode = n;
-
-  resetPanelSections();
-  document.getElementById('dpTag').textContent = stageTagFor(n);
-  document.getElementById('dpTitle').textContent = n.title;
-
-  document.getElementById('dpWhatSection').style.display = '';
-  document.getElementById('dpWhatLabel').textContent = 'What it does';
-  document.getElementById('dpWhat').textContent = n.tooltip.what;
-
-  document.getElementById('dpWhySection').style.display = '';
-  document.getElementById('dpWhy').textContent = n.tooltip.why;
-
-  document.getElementById('dpNowSection').style.display = '';
-  document.getElementById('dpNow').textContent = rightNowText(n);
-
-  document.getElementById('dpCountersSection').style.display = '';
-  var countersWrap = document.getElementById('dpCounters');
-  countersWrap.innerHTML = '';
-  (n.counters||[]).forEach(function(c){
+  function esc(s){
     var d = document.createElement('div');
-    d.className = 'dp-counter';
-    d.innerHTML = '<div class="dp-counter-label">'+escapeHtml(c.label)+'</div><div class="dp-counter-value" id="panelcv-'+n.id+'-'+c.id+'">-</div>';
-    countersWrap.appendChild(d);
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function selectWorkflow(id){
+    var wf = workflows.find(function(w){ return w.id === id; });
+    if(!wf) return;
+
+    activeId = id;
+    localStorage.setItem(STORAGE_LAST, id);
+    if(location.hash !== '#' + id) history.replaceState(null, '', '#' + id);
+
+    renderCards();
+    activeLabel.textContent = wf.title + ' · ' + wf.subtitle;
+    empty.classList.remove('show');
+    loading.classList.remove('hidden');
+    loadingText.textContent = 'Loading ' + wf.title + '…';
+    frame.hidden = false;
+    frame.src = wf.file;
+
+    if(isMobile()) closeMobileSidebar();
+  }
+
+  frame.addEventListener('load', function(){
+    loading.classList.add('hidden');
   });
 
-  if(n.minor){
-    document.getElementById('dpMinorSection').style.display = '';
-    document.getElementById('dpMinorLabel').textContent = 'Inside this stage';
-    document.getElementById('dpMinorList').innerHTML = n.minor.map(function(item){
-      return '<li><span class="dot"></span><span class="txt">'+escapeHtml(item)+'</span></li>';
-    }).join('');
-    var noteEl = document.getElementById('dpMinorNote');
-    if(n.minorNote){ noteEl.textContent = n.minorNote; noteEl.style.display=''; }
-    else { noteEl.textContent=''; noteEl.style.display='none'; }
-  }
-
-  document.getElementById('detailPanel').classList.add('open');
-  renderAllCounters();
-
-  clearInterval(panelTimer);
-  panelTimer = setInterval(function(){
-    if(pinnedNode===n) document.getElementById('dpNow').textContent = rightNowText(n);
-  }, 2800);
-}
-
-/* ---------- board / card panels (same click-pin panel, different content) ---------- */
-function boardTagFor(b){
-  if(b.act===0) return 'Opening';
-  return b.act===1 ? 'Act One — Who We Are' : 'Act Two — The Work';
-}
-
-function openBoardPanel(b){
-  pinnedNode = null;
-  clearInterval(panelTimer);
-  clearSelection();
-  var el = document.getElementById('board-'+b.id);
-  if(el) el.classList.add('selected');
-  pinnedEl = el;
-
-  resetPanelSections();
-  document.getElementById('dpTag').textContent = boardTagFor(b);
-  document.getElementById('dpTitle').textContent = b.headline;
-
-  if(b.detail){
-    document.getElementById('dpWhatSection').style.display = '';
-    document.getElementById('dpWhatLabel').style.display = 'none';
-    document.getElementById('dpWhat').textContent = b.detail;
-  } else if(b.detailList){
-    document.getElementById('dpMinorSection').style.display = '';
-    document.getElementById('dpMinorLabel').style.display = 'none';
-    document.getElementById('dpMinorList').innerHTML = b.detailList.map(function(item){
-      return '<li><span class="dot"></span><span class="txt">'+escapeHtml(item)+'</span></li>';
-    }).join('');
-    document.getElementById('dpMinorNote').style.display = 'none';
-  }
-
-  document.getElementById('detailPanel').classList.add('open');
-}
-
-function openCardPanel(card){
-  pinnedNode = null;
-  clearInterval(panelTimer);
-  clearSelection();
-  var el = document.getElementById('card-'+card._domId);
-  if(el) el.classList.add('selected');
-  pinnedEl = el;
-
-  resetPanelSections();
-  document.getElementById('dpTag').textContent = 'Case study';
-  document.getElementById('dpTitle').textContent = card.title;
-  document.getElementById('dpWhatSection').style.display = '';
-  document.getElementById('dpWhatLabel').style.display = 'none';
-  document.getElementById('dpWhat').textContent = card.detail;
-
-  document.getElementById('detailPanel').classList.add('open');
-}
-
-function closePanel(){
-  clearSelection();
-  pinnedNode = null;
-  document.getElementById('detailPanel').classList.remove('open');
-  clearInterval(panelTimer);
-}
-
-/* ---------- manual-enrichment cost calculator (Task C) ----------
-   computeManualCost is a pure function - no DOM, no globals - so it can be
-   unit-tested standalone before it is ever wired to the modal. Cost is
-   deliberately headcount-independent: employees changes elapsed time only,
-   totalCost never references it. Any divisor that is empty/zero/negative/
-   non-numeric degrades that output to null (never NaN/Infinity); formatting
-   to the on-screen em-dash happens one layer up, in formatManualCost(). */
-function computeManualCost(inputs){
-  function num(v){
-    var x = Number(v);
-    return (v==='' || v===null || v===undefined || !isFinite(x)) ? NaN : x;
-  }
-  var accountsPerDay = num(inputs.accountsPerDay);
-  var salary = num(inputs.salary);
-  var workingDays = num(inputs.workingDays);
-  var employees = num(inputs.employees);
-  var poolSize = num(inputs.poolSize);
-
-  var costPerAccount = null, totalCost = null, elapsedWorkingDays = null, elapsedMonths = null;
-
-  if(!isNaN(salary) && salary>=0 && !isNaN(workingDays) && workingDays>0 && !isNaN(accountsPerDay) && accountsPerDay>0){
-    costPerAccount = salary / (workingDays * accountsPerDay);
-    if(!isNaN(poolSize) && poolSize>=0) totalCost = poolSize * costPerAccount; // never references employees
-  }
-
-  if(!isNaN(poolSize) && poolSize>=0 && !isNaN(accountsPerDay) && accountsPerDay>0 && !isNaN(employees) && employees>0){
-    elapsedWorkingDays = poolSize / (accountsPerDay * employees);
-    if(!isNaN(workingDays) && workingDays>0) elapsedMonths = elapsedWorkingDays / workingDays;
-  }
-
-  return { costPerAccount:costPerAccount, totalCost:totalCost, elapsedWorkingDays:elapsedWorkingDays, elapsedMonths:elapsedMonths };
-}
-
-function formatEuro(v, decimals){
-  return '€' + v.toLocaleString('en-US', { minimumFractionDigits:decimals||0, maximumFractionDigits:decimals||0 });
-}
-
-function formatManualCost(out){
-  var dash = '—';
-  var totalCost = out.totalCost===null ? dash : formatEuro(Math.round(out.totalCost), 0);
-  var time = out.elapsedWorkingDays===null ? dash :
-    Math.round(out.elapsedWorkingDays)+' working days'+(out.elapsedMonths===null ? '' : ' (~'+out.elapsedMonths.toFixed(1)+' months)');
-  var perAccount = out.costPerAccount===null ? '' : 'Cost per enriched account: '+formatEuro(out.costPerAccount, 2);
-  return { totalCost:totalCost, time:time, perAccount:perAccount };
-}
-
-function readCalcInputs(){
-  return {
-    // calcHours (working hours/day) is captured for the live narrative only -
-    // the formulas Aakash specified never reference it, see the build prompt.
-    accountsPerDay: document.getElementById('calcRate').value,
-    salary: document.getElementById('calcSalary').value,
-    workingDays: document.getElementById('calcDays').value,
-    employees: document.getElementById('calcEmployees').value,
-    poolSize: document.getElementById('calcPool').value
-  };
-}
-
-function renderCalc(){
-  var fmt = formatManualCost(computeManualCost(readCalcInputs()));
-  document.getElementById('calcTotalOut').textContent = fmt.totalCost;
-  document.getElementById('calcTimeOut').textContent = fmt.time;
-  document.getElementById('calcPerAccountOut').textContent = fmt.perAccount;
-}
-
-function openCalc(){
-  document.getElementById('calcScrim').classList.add('open');
-  renderCalc();
-}
-function closeCalc(){
-  document.getElementById('calcScrim').classList.remove('open');
-}
-
-/* ---------- Major / Minor toggle ---------- */
-function renderMinorContent(n, wrap){
-  var html = '<div class="minor-inner"><ul class="minor-list">';
-  n.minor.forEach(function(item){
-    html += '<li><span class="dot"></span><span class="txt">'+escapeHtml(item)+'</span></li>';
-  });
-  html += '</ul></div>';
-  wrap.innerHTML = html;
-}
-
-function setMode(minor){
-  if(minor===minorMode) return;
-  minorMode = minor;
-  modeVersion++;
-  var myVersion = modeVersion;
-
-  var btnMajor = document.getElementById('btnMajor');
-  var btnMinor = document.getElementById('btnMinor');
-  btnMajor.classList.toggle('active', !minor);
-  btnMinor.classList.toggle('active', minor);
-  btnMajor.setAttribute('aria-pressed', String(!minor));
-  btnMinor.setAttribute('aria-pressed', String(minor));
-
-  NODES.forEach(function(n){
-    if(!n.minor) return;
-    var wrap = document.getElementById('minorwrap-'+n.id);
-    if(!wrap) return;
-    var delay = Math.max(0, STAGGER_ORDER.indexOf(n.id)) * 70;
-
-    if(minor){
-      renderMinorContent(n, wrap);
-      var targetH = wrap.scrollHeight;
-      wrap.style.maxHeight = '0px';
-      void wrap.offsetHeight;
-      setTimeout(function(){
-        if(modeVersion!==myVersion) return;
-        wrap.style.maxHeight = targetH+'px';
-        wrap.classList.add('open');
-      }, delay);
-    } else {
-      wrap.style.maxHeight = '0px';
-      wrap.classList.remove('open');
-      setTimeout(function(){
-        if(modeVersion!==myVersion) return;
-        wrap.innerHTML = '';
-      }, 500);
-    }
-  });
-
-  BOARDS.forEach(function(b){
-    if(!b.lines) return;
-    var wrap = document.getElementById('boardlines-'+b.id);
-    if(!wrap) return;
-    // No stagger here (unlike nodes' STAGGER_ORDER): only the centred board is
-    // ever in view, so there is no "wave across a visible row" to animate -
-    // staggering by array position would just add latency to whichever board
-    // the user happens to be looking at, proportional to its unrelated index.
-    var delay = 0;
-
-    if(minor){
-      renderBoardLines(b, wrap);
-      var targetH = wrap.scrollHeight;
-      wrap.style.maxHeight = '0px';
-      void wrap.offsetHeight;
-      setTimeout(function(){
-        if(modeVersion!==myVersion) return;
-        wrap.style.maxHeight = targetH+'px';
-        wrap.classList.add('open');
-      }, delay);
-    } else {
-      wrap.style.maxHeight = '0px';
-      wrap.classList.remove('open');
-      setTimeout(function(){
-        if(modeVersion!==myVersion) return;
-        wrap.innerHTML = '';
-      }, 500);
-    }
-  });
-}
-
-/* ---------- Live simulation ON/OFF (freeze) ---------- */
-function setRunning(r){
-  running = r;
-  var btn = document.getElementById('simToggle');
-  btn.setAttribute('aria-pressed', String(r));
-  btn.classList.toggle('off', !r);
-  btn.querySelector('.state').textContent = r ? 'ON' : 'OFF';
-  document.getElementById('canvasInner').classList.toggle('frozen', !r);
-  document.getElementById('docsPanel').classList.toggle('open', !r);
-  if(!r) closePanel();
-}
-
-/* ---------- docs panel ---------- */
-function buildDocsPanel(){
-  var lines = [
-    'Salesforce. Active pool sync, read only.',
-    'Demand Discovery. Live hiring signal by ZIP and ICP, via TheirStack.',
-    'Identity Resolution. One canonical company, one key.',
-    'CRM Match Engine. Already yours, or net new.',
-    'Contact Enrichment. Decision makers and direct contacts, via Lusha and Apollo.',
-    'Verification. Deliverability and confidence scoring, via MillionVerifier.',
-    'Salesforce Write-back. Fill only, never overwrite, full provenance.',
-    'Human Review. Grey zone, never auto decided.'
-  ];
-  document.getElementById('docsList').innerHTML = lines.map(function(l){
-    return '<li>'+escapeHtml(l)+'</li>';
-  }).join('');
-}
-
-/* ---------- sub-step highlight cycling (Full detail mode only) ---------- */
-setInterval(function(){
-  if(!running || !minorMode) return;
-  NODES.forEach(function(n){
-    if(!n.minor) return;
-    var wrap = document.getElementById('minorwrap-'+n.id);
-    if(!wrap || !wrap.classList.contains('open')) return;
-    var items = wrap.querySelectorAll('.minor-list li');
-    if(!items.length) return;
-    var idx = (hlIndex[n.id]||0) % items.length;
-    items.forEach(function(li){ li.classList.remove('hl'); });
-    items[idx].classList.add('hl');
-    hlIndex[n.id] = idx+1;
-  });
-}, 1800);
-
-/* ---------- board reveal + one-shot edge particles ---------- */
-function playBoardReveal(b){
-  var el = document.getElementById('board-'+b.id);
-  if(!el) return;
-  var targets = [];
-  var headline = el.querySelector('.board-headline'); if(headline) targets.push(headline);
-  var sub = el.querySelector('.board-sub'); if(sub) targets.push(sub);
-  if(b.lines){
-    var lis = el.querySelectorAll('.board-lines li');
-    lis.forEach(function(li){ targets.push(li); });
-  }
-  if(b.cards){
-    var cards = el.querySelectorAll('.board-card');
-    cards.forEach(function(c){ targets.push(c); });
-  }
-  if(b.tiles){
-    var tiles = el.querySelectorAll('.board-tile');
-    tiles.forEach(function(t){ targets.push(t); });
-  }
-  targets.forEach(function(t, i){
-    t.classList.remove('board-anim');
-    void t.offsetWidth;
-    t.style.animationDelay = (i*70)+'ms';
-    t.classList.add('board-anim');
-  });
-}
-
-function spawnEdgeParticlesInto(b){
-  var emitter = boardEdgeEmitters[b.id];
-  if(emitter){
-    emitter.spawn(randRange(0.55,0.75), false);
-  }
-  if(b.id==='bridge' && bridgeGutterEmitter){
-    bridgeGutterEmitter.spawn(randRange(0.25,0.35), false);
-  }
-}
-
-function updateBoardEdgeEmitters(dt){
-  Object.keys(boardEdgeEmitters).forEach(function(id){ boardEdgeEmitters[id].update(dt); });
-  if(bridgeGutterEmitter) bridgeGutterEmitter.update(dt);
-}
-
-/* ---------- board navigation (click / arrow-key stepping / panel) ---------- */
-function boardFraming(b){
-  var vp = document.getElementById('canvasViewport');
-  var vw = vp.clientWidth, vh = vp.clientHeight;
-  var z = Math.min((vw*0.7)/b.w, (vh*0.8)/b.h);
-  z = Math.max(0.5, Math.min(2.2, z));
-  var cx = b.x + b.w/2, cy = b.y + b.h/2;
-  return { zoom:z, panX: vw/2 - cx*z, panY: vh/2 - cy*z };
-}
-
-/* The proposal's "home" / default view: a fixed 50% zoom centred on the current
-   board (the opening plate on first entry). This is the zoom Aakash presents
-   from; clicking a board zooms IN off this base, clicking outside returns to it.
-   He can bump the base up manually from the zoom bar at any time. */
-function proposalBaseFraming(){
-  var vp = document.getElementById('canvasViewport');
-  var vw = vp.clientWidth, vh = vp.clientHeight;
-  var b = lastBoard || BOARD_BY_ID.open || STEP_BOARDS[0];
-  var z = PROPOSAL_BASE_ZOOM;
-  var cx = b.x + b.w/2, cy = b.y + b.h/2;
-  return { zoom:z, panX: vw/2 - cx*z, panY: vh/2 - cy*z };
-}
-
-function centerOnBoard(b, animate){
-  lastBoard = b;
-  playBoardReveal(b);
-  spawnEdgeParticlesInto(b);
-  var framing = boardFraming(b);
-  if(animate) animateTransform(framing, TRAVEL_MS);
-  else { zoom = framing.zoom; panX = framing.panX; panY = framing.panY; applyTransform(); }
-}
-
-function onBoardClick(b){
-  clearBridgeTimer();
-  // Capture the current (un-focused) transform ONCE so a later click-outside
-  // returns to exactly this base zoom - and stays captured even if he clicks
-  // straight from one board to the next, so the base survives the whole run.
-  if(CURRENT_TERRITORY==='proposal' && focusSaved===null){
-    focusSaved = { zoom:zoom, panX:panX, panY:panY };
-  }
-  centerOnBoard(b, true);
-  if(b.id==='bridge'){
-    // Last container: zoom into it, hold ~2s, then smoothly travel to the live workflow.
-    bridgeTimer = setTimeout(function(){ bridgeTimer = null; switchTerritory('workflow'); }, 2000);
-    return;
-  }
-  if(b.detail || b.detailList) openBoardPanel(b);
-}
-
-function onCardClick(card, board){
-  clearBridgeTimer();
-  if(CURRENT_TERRITORY==='proposal' && focusSaved===null){
-    focusSaved = { zoom:zoom, panX:panX, panY:panY };
-  }
-  if(lastBoard !== board) centerOnBoard(board, true);
-  openCardPanel(card);
-}
-
-function stepBoard(dir){
-  if(CURRENT_TERRITORY!=='proposal') return;
-  var idx = STEP_BOARDS.indexOf(lastBoard);
-  if(idx===-1){
-    var anchor = lastBoard && lastBoard.branchFrom ? BOARD_BY_ID[lastBoard.branchFrom] : STEP_BOARDS[0];
-    idx = STEP_BOARDS.indexOf(anchor);
-    if(idx===-1) idx = 0;
-  } else {
-    idx = Math.max(0, Math.min(STEP_BOARDS.length-1, idx+dir));
-  }
-  centerOnBoard(STEP_BOARDS[idx], true);
-}
-
-/* ---------- territory travel (workflow <-> proposal) ---------- */
-function territoryHome(name){
-  var vp = document.getElementById('canvasViewport');
-  var vw = vp.clientWidth;
-  if(name==='workflow'){
-    var z = Math.max(0.5, Math.min(2.5, vw / WORKFLOW_W));
-    return { zoom:z, panX: -WORKFLOW_OFFSET_X*z, panY: 0 };
-  }
-  return proposalBaseFraming();
-}
-
-function updateTerritoryToggleUI(){
-  var pBtn = document.getElementById('btnProposal'), wBtn = document.getElementById('btnWorkflow');
-  pBtn.classList.toggle('active', CURRENT_TERRITORY==='proposal');
-  wBtn.classList.toggle('active', CURRENT_TERRITORY==='workflow');
-  pBtn.setAttribute('aria-pressed', String(CURRENT_TERRITORY==='proposal'));
-  wBtn.setAttribute('aria-pressed', String(CURRENT_TERRITORY==='workflow'));
-}
-
-function switchTerritory(name){
-  if(CURRENT_TERRITORY===name) return;
-  CURRENT_TERRITORY = name;
-  clearBridgeTimer();
-  focusSaved = null;
-  updateTerritoryToggleUI();
-  closePanel();
-  if(name==='proposal'){
-    // Land on the proposal at its 50% base zoom (not zoomed into one board).
-    animateTransform(proposalBaseFraming(), TRAVEL_MS);
-  } else {
-    animateTransform(territoryHome('workflow'), TRAVEL_MS);
-  }
-}
-
-/* ---------- zoom / pan (our own, never the browser's) ---------- */
-function applyTransform(){
-  document.getElementById('canvasInner').style.transform = 'translate('+panX+'px,'+panY+'px) scale('+zoom+')';
-  document.getElementById('zoomPct').textContent = Math.round(zoom*100)+'%';
-}
-function easeInOutCubic(t){ return t<0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2; }
-function cancelTravel(){
-  if(travelAnim){ cancelAnimationFrame(travelAnim.raf); travelAnim = null; }
-}
-function animateTransform(target, duration){
-  cancelTravel();
-  var start = { zoom:zoom, panX:panX, panY:panY };
-  var t0 = null;
-  travelAnim = {};
-  function step(ts){
-    if(t0===null) t0 = ts;
-    var p = Math.min(1, (ts-t0)/duration);
-    var e = easeInOutCubic(p);
-    zoom = start.zoom + (target.zoom-start.zoom)*e;
-    panX = start.panX + (target.panX-start.panX)*e;
-    panY = start.panY + (target.panY-start.panY)*e;
-    applyTransform();
-    if(p<1) travelAnim.raf = requestAnimationFrame(step);
-    else travelAnim = null;
-  }
-  travelAnim.raf = requestAnimationFrame(step);
-}
-function setZoom(newZoom, anchorClientX, anchorClientY){
-  newZoom = Math.max(0.5, Math.min(2.5, newZoom));
-  var vp = document.getElementById('canvasViewport');
-  var vpRect = vp.getBoundingClientRect();
-  var localX = anchorClientX - vpRect.left;
-  var localY = anchorClientY - vpRect.top;
-  var canvasPtX = (localX - panX) / zoom;
-  var canvasPtY = (localY - panY) / zoom;
-  zoom = newZoom;
-  panX = localX - canvasPtX*zoom;
-  panY = localY - canvasPtY*zoom;
-  applyTransform();
-}
-function zoomBy(delta){
-  cancelTravel();
-  var vp = document.getElementById('canvasViewport');
-  var r = vp.getBoundingClientRect();
-  setZoom(zoom+delta, r.left+r.width/2, r.top+r.height/2);
-}
-function resetZoom(){
-  cancelTravel();
-  var home = territoryHome(CURRENT_TERRITORY);
-  zoom = home.zoom; panX = home.panX; panY = home.panY;
-  applyTransform();
-}
-function initZoomPan(){
-  var vp = document.getElementById('canvasViewport');
-  CURRENT_TERRITORY = 'workflow';
-  var home = territoryHome('workflow');
-  zoom = home.zoom; panX = home.panX; panY = home.panY;
-  applyTransform();
-  updateTerritoryToggleUI();
-
-  /* Unified mouse+touch+pen path via Pointer Events (Task A). activePointers
-     tracks every pointer currently down, keyed by pointerId: exactly one ->
-     pan (same 4px move threshold/click-vs-drag logic the mouse path always
-     had), exactly two -> pinch-zoom off the pair's distance/midpoint, never
-     both at once. */
-  var activePointers = new Map();
-  var pinchPrevDist = 0;
-
-  function pointersArr(){ return Array.from(activePointers.values()); }
-  function pointerDist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
-  function pointerMid(a,b){ return { x:(a.x+b.x)/2, y:(a.y+b.y)/2 }; }
-
-  vp.addEventListener('pointerdown', function(e){
-    if(e.target.closest('.node')) return;
-    try { vp.setPointerCapture(e.pointerId); } catch(err){ /* not every synthetic/edge-case pointerId is capturable; the Map-based tracking below works fine without it */ }
-    activePointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
-    cancelTravel();
-
-    if(activePointers.size === 1){
-      isDragging = true; dragMoved = false;
-      dragStartClientX = e.clientX; dragStartClientY = e.clientY;
-      dragStartPanX = panX; dragStartPanY = panY;
-      vp.classList.add('dragging');
-    } else if(activePointers.size === 2){
-      isDragging = false;
-      vp.classList.remove('dragging');
-      var pts = pointersArr();
-      pinchPrevDist = pointerDist(pts[0], pts[1]);
-    }
-  });
-  window.addEventListener('pointermove', function(e){
-    if(!activePointers.has(e.pointerId)) return;
-    activePointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
-
-    if(activePointers.size >= 2){
-      var pts = pointersArr();
-      var dist = pointerDist(pts[0], pts[1]);
-      if(pinchPrevDist > 0){
-        var mid = pointerMid(pts[0], pts[1]);
-        setZoom(zoom * (dist/pinchPrevDist), mid.x, mid.y);
-      }
-      pinchPrevDist = dist;
+  function initFromHash(){
+    var hash = location.hash.replace(/^#/, '');
+    if(hash && workflows.some(function(w){ return w.id === hash; })){
+      selectWorkflow(hash);
       return;
     }
-
-    if(!isDragging) return;
-    var dx = e.clientX-dragStartClientX, dy = e.clientY-dragStartClientY;
-    if(Math.abs(dx)>4 || Math.abs(dy)>4) dragMoved = true;
-    panX = dragStartPanX+dx; panY = dragStartPanY+dy;
-    applyTransform();
-  });
-  function releasePointer(e){
-    if(!activePointers.has(e.pointerId)) return;
-    activePointers.delete(e.pointerId);
-    if(activePointers.size < 2) pinchPrevDist = 0;
-    if(activePointers.size === 0 && isDragging){
-      isDragging = false;
-      vp.classList.remove('dragging');
-      if(!dragMoved){
-        closePanel();
-        clearBridgeTimer();
-        // A click on the empty canvas (not a drag) while a board is focused
-        // returns to the base zoom captured before we zoomed in - so he never
-        // has to hit the minus button to reset between containers.
-        if(CURRENT_TERRITORY==='proposal' && focusSaved){
-          var saved = focusSaved; focusSaved = null;
-          animateTransform(saved, TRAVEL_MS);
-        }
-      }
+    var last = localStorage.getItem(STORAGE_LAST);
+    if(last && workflows.some(function(w){ return w.id === last; })){
+      selectWorkflow(last);
+      return;
     }
-  }
-  window.addEventListener('pointerup', releasePointer);
-  window.addEventListener('pointercancel', releasePointer);
-
-  vp.addEventListener('wheel', function(e){
-    if(!e.ctrlKey) return;
-    e.preventDefault();
-    cancelTravel();
-    var factor = Math.exp(-e.deltaY*0.0015);
-    setZoom(zoom*factor, e.clientX, e.clientY);
-  }, { passive:false });
-
-  document.getElementById('zoomIn').addEventListener('click', function(){ zoomBy(0.1); });
-  document.getElementById('zoomOut').addEventListener('click', function(){ zoomBy(-0.1); });
-  document.getElementById('zoomReset').addEventListener('click', resetZoom);
-
-  document.addEventListener('keydown', function(e){
-    if(e.target && (e.target.tagName==='INPUT' || e.target.tagName==='TEXTAREA')){
-      if(e.key==='Escape'){ e.target.blur(); closeCalc(); }
-      return; // typing digits/minus into a calculator field must never fire canvas shortcuts
+    if(workflows.length === 1){
+      selectWorkflow(workflows[0].id);
+      return;
     }
-    if(e.key==='Escape'){ closeCalc(); closePanel(); return; }
-    if(e.key==='+' || e.key==='='){ zoomBy(0.1); e.preventDefault(); }
-    else if(e.key==='-'){ zoomBy(-0.1); e.preventDefault(); }
-    else if(e.key==='0'){ resetZoom(); e.preventDefault(); }
-    else if(e.key==='p' || e.key==='P'){ switchTerritory('proposal'); }
-    else if(e.key==='w' || e.key==='W'){ switchTerritory('workflow'); }
-    else if(e.key==='ArrowRight'){ stepBoard(1); }
-    else if(e.key==='ArrowLeft'){ stepBoard(-1); }
-  });
-}
-
-/* ---------- UI bindings ---------- */
-function bindUI(){
-  document.getElementById('btnMajor').addEventListener('click', function(){ setMode(false); });
-  document.getElementById('btnMinor').addEventListener('click', function(){ setMode(true); });
-  document.getElementById('simToggle').addEventListener('click', function(){ setRunning(!running); });
-  document.getElementById('dpClose').addEventListener('click', function(e){ e.stopPropagation(); closePanel(); });
-  document.getElementById('detailPanel').addEventListener('click', function(e){ e.stopPropagation(); });
-  document.getElementById('btnProposal').addEventListener('click', function(){ switchTerritory('proposal'); });
-  document.getElementById('btnWorkflow').addEventListener('click', function(){ switchTerritory('workflow'); });
-
-  document.getElementById('btnCalculator').addEventListener('click', openCalc);
-  document.getElementById('calcClose').addEventListener('click', function(e){ e.stopPropagation(); closeCalc(); });
-  document.getElementById('calcScrim').addEventListener('click', function(e){ if(e.target===e.currentTarget) closeCalc(); });
-  document.getElementById('calcModal').addEventListener('click', function(e){ e.stopPropagation(); });
-  ['calcHours','calcRate','calcSalary','calcDays','calcEmployees','calcPool'].forEach(function(id){
-    document.getElementById(id).addEventListener('input', renderCalc);
-  });
-}
-
-/* ---------- main loop ---------- */
-function loop(ts){
-  if(running){
-    if(lastFrameTs===null) lastFrameTs = ts;
-    var dt = Math.min((ts-lastFrameTs)/1000, 0.05);
-    lastFrameTs = ts;
-    simTime += dt;
-    updateOrchestrator(dt);
-    updateNodeActivity();
-    applyFlashClasses();
-    updateCounters(dt);
-    updateParticles(dt);
-    updateBranchEmits(dt);
-    updateControlEmitters(dt);
-    updateBoardEdgeEmitters(dt);
-    frameCount++;
-    if(frameCount % 6 === 0) renderAllCounters();
-  } else {
-    lastFrameTs = null;
+    empty.classList.add('show');
+    loading.classList.add('hidden');
+    frame.hidden = true;
   }
-  requestAnimationFrame(loop);
-}
 
-/* ---------- init ---------- */
-function init(){
-  NODES.forEach(function(n){ NODE_BY_ID[n.id] = n; });
-  layoutNodes();
-  layoutBoards();
+  document.getElementById('menuBtn').addEventListener('click', toggleSidebar);
+  backdrop.addEventListener('click', closeMobileSidebar);
 
-  var inner = document.getElementById('canvasInner');
-  inner.style.width = CANVAS_W+'px';
+  window.addEventListener('hashchange', function(){
+    var hash = location.hash.replace(/^#/, '');
+    if(hash && hash !== activeId && workflows.some(function(w){ return w.id === hash; })){
+      selectWorkflow(hash);
+    }
+  });
 
-  buildNodes();
-  buildBoards();
-  finalizeLayout();
+  MOBILE.addEventListener('change', function(){
+    sidebar.classList.remove('open', 'collapsed');
+    backdrop.classList.remove('show');
+    if(!isMobile()){
+      setSidebarCollapsed(localStorage.getItem(STORAGE_COLLAPSED) === '1');
+    }
+  });
 
-  buildSvgDefs();
-  buildEngineCoreVisual();
-  buildOrchGlow();
-  buildPipesSvg();
-  buildBoardEdgesSvg();
-  spinArcEl = document.querySelector('#spin-orchestrator .spin-arc');
-
-  initCounters();
-  renderAllCounters();
-  buildDocsPanel();
-  bindUI();
-  initZoomPan();
-
-  requestAnimationFrame(loop);
-}
-
-if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
+  fetch('workflows.json')
+    .then(function(r){ if(!r.ok) throw new Error('Failed to load registry'); return r.json(); })
+    .then(function(data){
+      workflows = data;
+      renderCards();
+      if(!isMobile()) setSidebarCollapsed(localStorage.getItem(STORAGE_COLLAPSED) === '1');
+      initFromHash();
+    })
+    .catch(function(err){
+      empty.classList.add('show');
+      loading.classList.add('hidden');
+      empty.querySelector('.empty-title').textContent = 'Could not load workflows';
+      empty.querySelector('.empty-sub').textContent = err.message;
+    });
 })();
 </script>
 </body>

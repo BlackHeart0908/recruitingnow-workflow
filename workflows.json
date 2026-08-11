@@ -1,0 +1,11 @@
+[
+  {
+    "id": "recruitingnow",
+    "title": "RecruitingNOW",
+    "subtitle": "Salesforce enrichment pipeline",
+    "client": "RecruitingNOW · Germany",
+    "file": "workflows/recruitingnow.html",
+    "accent": "#EF7F1A",
+    "tags": ["Proposed Architecture", "Salesforce"]
+  }
+]
