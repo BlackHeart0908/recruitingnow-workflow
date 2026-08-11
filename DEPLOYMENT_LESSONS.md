@@ -38,6 +38,38 @@ a valid redirect status**.
 
 ---
 
+## 2026-08-11 — Stale Wrangler asset cache keeps deleted `_redirects`
+
+**Symptom:** Build still fails with the same `_redirects` / `404` error **after**
+`_redirects` was deleted from git and pushed. Logs show most files skipped:
+`Uploaded 3 files (42 already uploaded)`.
+
+**Cause:** Wrangler uses **content-hash asset caching** at Cloudflare's edge. Deleting
+a file from git does **not** remove it from the cached asset bundle — the old
+`_redirects` (with `/*.md / 404`) was still included via "already uploaded" cache
+entries from the previous failed deploys.
+
+**Fix:**
+- Moved all deployable static files into a dedicated **`public/`** directory.
+- Pointed `wrangler.jsonc` assets at `"./public"` so the asset manifest is a fresh
+  namespace (new paths, new hashes — no inherited `_redirects`).
+- Removed `_headers` from deploy bundle (no `.md` files live in `public/` anyway).
+- Kept internal docs (`DEPLOYMENT_LESSONS.md`, `README.md`) at repo root only —
+  they are **not** uploaded as static assets.
+
+**Prevention checklist:**
+- [ ] Always deploy static files from an isolated directory (`public/`), never repo
+      root (`.`).
+- [ ] After deleting a Wrangler config file (`_redirects`, `_headers`), do **not**
+      expect deletion alone to fix deploy — verify build logs for "(N already
+      uploaded)" and check the cached bundle is not retaining the old file.
+- [ ] If a cached bad asset persists, change the assets directory path or force a
+      full re-upload (`wrangler deploy --skip-caching` when running locally).
+- [ ] Scan build logs: if `.git/` paths appear in upload lists, the assets directory
+      is wrong or missing ignore rules.
+
+---
+
 ## 2026-08-11 — `.git/` directory included in static asset upload
 
 **Symptom:** Build logs listed files like `/.git/objects/...` and `/.git/HEAD` in the
