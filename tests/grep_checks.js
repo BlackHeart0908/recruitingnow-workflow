@@ -42,6 +42,16 @@ function checkNoEmDash(relPath) {
   }
 }
 
+function checkMinHits(relPath, pattern, minHits, label) {
+  const content = readFile(relPath);
+  const re = new RegExp(pattern, 'g');
+  const matches = content.match(re);
+  const count = matches ? matches.length : 0;
+  if (count < minHits) {
+    failures.push(label + ': expected >= ' + minHits + ' hit(s) for /' + pattern + '/ in ' + relPath + ', found ' + count);
+  }
+}
+
 /* Check 1: account-enrichment.html has zero client-name occurrences */
 checkNoStrings(
   'public/workflows/account-enrichment.html',
@@ -98,6 +108,49 @@ checkNoStrings(
   'tests/library_acceptance.spec.js',
   'package.json'
 ].forEach(checkNoEmDash);
+
+/* Check A: menu pill fully removed from the shell */
+checkNoStrings(
+  'public/index.html',
+  ['menu-pill', '#menuPill', 'menuPill', '--menu-pill-size', 'STORAGE_LAST', 'wflib.lastWorkflow'],
+  'Check A'
+);
+
+/* Check B: shell listens for cross-frame postMessage */
+checkMinHits('public/index.html', 'addEventListener\\([\'"]message[\'"]', 1, 'Check B');
+
+/* Check C: every iframe page carries the menu button */
+['public/workflows/home.html', 'public/workflows/account-enrichment.html'].forEach(function (relPath) {
+  checkMinHits(relPath, 'wf-menu-btn', 1, 'Check C');
+});
+
+/* Check D: every iframe page posts to the shell */
+['public/workflows/home.html', 'public/workflows/account-enrichment.html'].forEach(function (relPath) {
+  checkMinHits(relPath, 'postMessage', 1, 'Check D');
+});
+
+/* Check E: no stale territory-era framing state survives in the workflow */
+checkNoStrings(
+  'public/workflows/account-enrichment.html',
+  ['WORKFLOW_OFFSET_X', 'territoryHome', 'initialPanX', 'initialPanY', 'initialZoom'],
+  'Check E'
+);
+
+/* Check F: postMessage never targets a wildcard origin, anywhere under public/ */
+(function checkNoWildcardPostMessage() {
+  function walk(dir) {
+    fs.readdirSync(dir, { withFileTypes: true }).forEach(function (entry) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (entry.isFile() && entry.name.endsWith('.html')) {
+        const rel = path.relative(ROOT, full);
+        checkNoPatterns(rel, ["postMessage\\(.*,\\s*['\"]\\*['\"]"], 'Check F');
+      }
+    });
+  }
+  walk(path.join(ROOT, 'public'));
+})();
 
 if (failures.length) {
   console.error('grep_checks.js: ' + failures.length + ' failure(s):');

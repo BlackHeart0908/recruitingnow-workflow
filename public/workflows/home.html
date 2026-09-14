@@ -7,6 +7,7 @@
 <style>
 :root{
   --bg-900:#121618;
+  --bg-700:#23282B;
   --ink:#FFFFFF;
   --ink-mute:#9BA6AB;
   --ink-dim:#6B7579;
@@ -14,6 +15,10 @@
 }
 *{box-sizing:border-box;}
 html,body{height:100%;margin:0;padding:0;background:var(--bg-900);color:var(--ink);font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+.hp-topbar{position:absolute;top:12px;left:12px;z-index:5;}
+.wf-menu-btn{appearance:none;border:none;background:transparent;color:var(--ink-mute);width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-right:10px;cursor:pointer;font-family:inherit;transition:background .2s,color .2s;}
+.wf-menu-btn:hover{background:var(--bg-700);color:var(--ink);}
+.wf-menu-btn svg{width:18px;height:18px;}
 .wrap{
   min-height:100%;
   display:flex;flex-direction:column;justify-content:center;
@@ -39,11 +44,29 @@ p.body-copy{
 </style>
 </head>
 <body>
+<div class="hp-topbar">
+  <!-- library nav button, required in every workflow -->
+  <button class="wf-menu-btn" id="wfMenuBtn" aria-label="Toggle library sidebar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+</div>
 <div class="wrap">
   <h1>[[HOMEPAGE_TITLE]]</h1>
   <p class="lead">[[HOMEPAGE_ONELINER]]</p>
   <p class="body-copy">[[HOMEPAGE_LIBRARY_DESC]]</p>
   <div class="helper">Pick a workflow from the left to see it run.</div>
 </div>
+<script>
+(function(){
+  var wfMenuBtn = document.getElementById('wfMenuBtn');
+  if(wfMenuBtn){
+    wfMenuBtn.addEventListener('click', function(){
+      if(window.parent && window.parent !== window){
+        window.parent.postMessage({ source: 'wflib', action: 'toggleSidebar' }, location.origin);
+      }
+    });
+  }
+})();
+</script>
 </body>
 </html>

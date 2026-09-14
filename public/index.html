@@ -18,7 +18,6 @@
   --border:rgba(255,255,255,.08);
   --sidebar-w:280px;
   --topbar-h:48px;
-  --menu-pill-size:34px;
   --ease:cubic-bezier(.4,0,.2,1);
 }
 *{box-sizing:border-box;}
@@ -55,27 +54,8 @@ button{font-family:inherit;cursor:pointer;}
   padding:5px 10px;border-radius:20px;white-space:nowrap;
 }
 
-/* ── Floating menu pill (desktop, sidebar collapsed) ── */
-.menu-pill{
-  display:none;
-  appearance:none;border:none;background:var(--bg-700);
-  color:var(--ink-mute);
-  position:fixed;top:12px;left:12px;z-index:30;
-  width:var(--menu-pill-size);height:var(--menu-pill-size);
-  border-radius:8px;
-  align-items:center;justify-content:center;
-  box-shadow:0 4px 16px rgba(0,0,0,.35);
-  transition:background .2s,color .2s;
-}
-.menu-pill:hover{background:var(--bg-600);color:var(--ink);}
-.menu-pill svg{width:18px;height:18px;}
-.menu-pill.visible{display:flex;}
-
 @media(min-width:769px){
   .topbar{display:none;}
-}
-@media(max-width:768px){
-  .menu-pill{display:none !important;}
 }
 
 /* ── Body layout ── */
@@ -229,10 +209,6 @@ button{font-family:inherit;cursor:pointer;}
     </div>
   </header>
 
-  <button class="menu-pill" id="menuPill" aria-label="Expand sidebar">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-  </button>
-
   <div class="body">
     <div class="backdrop" id="backdrop"></div>
 
@@ -271,7 +247,6 @@ button{font-family:inherit;cursor:pointer;}
 <script>
 (function(){
   var STORAGE_COLLAPSED = 'wflib.sidebarCollapsed';
-  var STORAGE_LAST = 'wflib.lastWorkflow';
   var MOBILE = window.matchMedia('(max-width:768px)');
 
   var workflows = [];
@@ -288,7 +263,6 @@ button{font-family:inherit;cursor:pointer;}
   var countBadge = document.getElementById('countBadge');
   var activeLabelDesktop = document.getElementById('activeLabelDesktop');
   var countBadgeDesktop = document.getElementById('countBadgeDesktop');
-  var menuPill = document.getElementById('menuPill');
 
   function isMobile(){ return MOBILE.matches; }
 
@@ -297,7 +271,6 @@ button{font-family:inherit;cursor:pointer;}
     sidebar.classList.toggle('collapsed', collapsed);
     document.getElementById('menuBtn').setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     localStorage.setItem(STORAGE_COLLAPSED, collapsed ? '1' : '0');
-    menuPill.classList.toggle('visible', collapsed);
   }
 
   function closeMobileSidebar(){
@@ -358,7 +331,6 @@ button{font-family:inherit;cursor:pointer;}
     if(!wf) return;
 
     activeId = id;
-    if(id !== 'home') localStorage.setItem(STORAGE_LAST, id);
     if(location.hash !== '#' + id) history.replaceState(null, '', '#' + id);
 
     renderCards();
@@ -382,36 +354,29 @@ button{font-family:inherit;cursor:pointer;}
     var hash = location.hash.replace(/^#/, '');
     if(hash && workflows.some(function(w){ return w.id === hash; })){
       selectWorkflow(hash);
-      return;
-    }
-    var last = localStorage.getItem(STORAGE_LAST);
-    if(!hash && !last && workflows.some(function(w){ return w.id === 'home'; })){
+    } else {
       selectWorkflow('home');
-      return;
     }
-    if(last && workflows.some(function(w){ return w.id === last; })){
-      selectWorkflow(last);
-      return;
-    }
-    if(workflows.length === 1){
-      selectWorkflow(workflows[0].id);
-      return;
-    }
-    empty.classList.add('show');
-    loading.classList.add('hidden');
-    frame.hidden = true;
   }
 
   document.getElementById('menuBtn').addEventListener('click', toggleSidebar);
   document.getElementById('sidebarMenuBtn').addEventListener('click', toggleSidebar);
-  menuPill.addEventListener('click', toggleSidebar);
   backdrop.addEventListener('click', closeMobileSidebar);
 
   window.addEventListener('hashchange', function(){
     var hash = location.hash.replace(/^#/, '');
-    if(hash && hash !== activeId && workflows.some(function(w){ return w.id === hash; })){
-      selectWorkflow(hash);
+    if(hash && workflows.some(function(w){ return w.id === hash; })){
+      if(hash !== activeId) selectWorkflow(hash);
+    } else if(!hash){
+      selectWorkflow('home');
     }
+  });
+
+  window.addEventListener('message', function(ev){
+    if(ev.origin !== location.origin) return;
+    var data = ev.data;
+    if(!data || data.source !== 'wflib') return;
+    if(data.action === 'toggleSidebar') toggleSidebar();
   });
 
   MOBILE.addEventListener('change', function(){
