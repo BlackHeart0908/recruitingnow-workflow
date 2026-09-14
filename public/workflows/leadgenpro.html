@@ -225,8 +225,11 @@ var TRUNK_CY = 900;               // trunk center y
 var TRUNK_W = 240;                // trunk pill width
 var TRUNK_H = 90;                 // trunk pill height
 var BRANCH_START_R = 220;         // radial distance from trunk center to first node of a branch
-var BRANCH_NODE_STEP = 210;       // additional radial distance per subsequent node along a branch
-var SUB_BRANCH_ANGLE_OFFSET = 35; // degrees the sub-branch axis diverges from its parent branch axis
+// Bumped 210 -> 270 in Prompt B-fix: 210 gave only ~10px clearance between adjacent node edges (node width ~200px), read as collapsed on the live URL.
+var BRANCH_NODE_STEP = 270;       // additional radial distance per subsequent node along a branch
+
+// Bumped 35 -> 45 in Prompt B-fix: wider fork angle keeps WhatsApp and Cold Call visually distinct from the CRM axis.
+var SUB_BRANCH_ANGLE_OFFSET = 45; // degrees the sub-branch axis diverges from its parent branch axis
 var STUB_R = 340;                 // radial distance from trunk center to a dimmed stub node
 var CANVAS_W = 2800;              // total canvas width
 var CANVAS_H = 1800;              // total canvas height
@@ -511,18 +514,114 @@ function measureNodeHeights(){
   });
 }
 
-function finalizeLayout(){
-  measureNodeHeights();
+function applyNodePosition(n){
+  var el = document.getElementById('node-'+n.id);
+  if(!el) return;
+  var h = n.kind==='trunk' ? TRUNK_H : nodeHeights[n.id].header;
+  n.h = h;
+  n.x = n.cx - n.w/2;
+  n.y = n.cy - h/2;
+  el.style.left = n.x+'px';
+  el.style.top = n.y+'px';
+}
+
+/* Pushes a branch-A node (and every node further out on the same branch, so
+   the chain stays contiguous) another `amount` px along its own polar axis.
+   Trunk and stub positions are fixed by hard rule and are never targets here. */
+function pushBranchOutward(target, amount){
   NODES.forEach(function(n){
-    var el = document.getElementById('node-'+n.id);
-    if(!el) return;
-    var h = n.kind==='trunk' ? TRUNK_H : nodeHeights[n.id].header;
-    n.h = h;
-    n.x = n.cx - n.w/2;
-    n.y = n.cy - h/2;
-    el.style.left = n.x+'px';
-    el.style.top = n.y+'px';
+    if(n.kind !== 'node' || n.branchId !== target.branchId) return;
+    if(n.id !== target.id && n.radialStep <= target.radialStep) return;
+    var axisDeg = BRANCH_AXIS[n.branchId] + (n.angleOffset||0);
+    var rad = axisDeg * Math.PI/180;
+    n.cx += amount * Math.cos(rad);
+    n.cy += amount * Math.sin(rad);
+    applyNodePosition(n);
   });
+}
+
+/* ---------- clearance pass ----------
+   Safety net for whatever the constant bumps above miss: walks every
+   non-trunk node pair, and if two boxes have less than 24px of edge-to-edge
+   gap, pushes the one further out on its branch (radialStep) outward by
+   another 40px, carrying every node downstream of it on that branch along
+   so the chain stays contiguous. A stub can never be the pushed side (its
+   position is fixed by hard rule) -- if a stub is the offending pair's only
+   pushable side, the OTHER node moves instead. Runs up to 3 passes; if an
+   overlap survives all 3, it is named via console.warn and left alone rather
+   than looped on forever.
+
+   Node coordinates here are canvas/world units, but #canvasInner is rendered
+   through a CSS scale(zoom) transform (see resetZoom() below) that shrinks
+   the whole 2800x1800 canvas to fit the viewport -- on everything but a very
+   tall screen, zoom < 1. The 24px minimum is a real on-screen requirement
+   (it is what the acceptance test measures via getBoundingClientRect), so it
+   is converted to world units by dividing by that same fit-to-viewport zoom
+   before comparing against world-space gaps. */
+function enforceClearance(){
+  var MIN_GAP_SCREEN = 24, PUSH_STEP = 40, MAX_PASSES = 3;
+  var candidates = NODES.filter(function(n){ return n.kind !== 'trunk'; });
+
+  var vw = window.innerWidth;
+  var vh = window.innerHeight - TOPBAR_H;
+  var fitZoom = Math.min(1, Math.min((vw - 2*SIDE_PAD) / CANVAS_W, (vh - 2*SIDE_PAD) / CANVAS_H));
+  fitZoom = Math.max(0.05, fitZoom); // guard against division blowing up on a degenerate viewport
+  var minGap = MIN_GAP_SCREEN / fitZoom;
+
+  function heightOf(n){ return n.kind==='trunk' ? TRUNK_H : nodeHeights[n.id].header; }
+
+  function findOverlaps(){
+    var pairs = [];
+    for(var i=0;i<candidates.length;i++){
+      for(var j=i+1;j<candidates.length;j++){
+        var a=candidates[i], b=candidates[j];
+        var dxGap = Math.max(0, Math.abs(a.cx-b.cx) - (a.w+b.w)/2);
+        var dyGap = Math.max(0, Math.abs(a.cy-b.cy) - (heightOf(a)+heightOf(b))/2);
+        var gap = Math.max(dxGap, dyGap);
+        if(gap < minGap) pairs.push([a,b]);
+      }
+    }
+    return pairs;
+  }
+
+  for(var pass=1; pass<=MAX_PASSES; pass++){
+    var overlaps = findOverlaps();
+    if(!overlaps.length) return;
+
+    if(pass===MAX_PASSES){
+      overlaps.forEach(function(pair){
+        console.warn('Clearance check: '+pair[0].id+' and '+pair[1].id+' still overlap after '+MAX_PASSES+' passes.');
+      });
+      return;
+    }
+
+    overlaps.forEach(function(pair){
+      var a=pair[0], b=pair[1];
+      var pushableA = a.kind==='node', pushableB = b.kind==='node';
+      var target = null;
+      if(pushableA && pushableB){
+        if(a.radialStep === b.radialStep){
+          target = Math.abs(a.angleOffset||0) >= Math.abs(b.angleOffset||0) ? a : b;
+        } else {
+          target = a.radialStep > b.radialStep ? a : b;
+        }
+      } else if(pushableA){
+        target = a;
+      } else if(pushableB){
+        target = b;
+      }
+      if(target) pushBranchOutward(target, PUSH_STEP);
+    });
+  }
+}
+
+function finalizeLayout(){
+  // Places every node from its measured height, then runs a pairwise
+  // clearance pass (see enforceClearance() below) that inflates spacing
+  // for any pair still tighter than 24px after the constant bumps above.
+  measureNodeHeights();
+  NODES.forEach(applyNodePosition);
+  enforceClearance();
 }
 
 /* ---------- build: node DOM ---------- */

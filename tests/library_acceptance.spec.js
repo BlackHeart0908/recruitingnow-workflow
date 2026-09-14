@@ -338,3 +338,45 @@ test('Test 20: Full Detail toggle reveals sub-steps', async ({ browser }) => {
   expect(found).toBeTruthy();
   await context.close();
 });
+
+test('LeadGenPro Branch A nodes have no overlapping bounding boxes', async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+  await page.waitForTimeout(1800); // let the clearance pass (up to 3 iterations) and layout settle
+
+  const result = await frame.evaluate(function () {
+    var branchEls = Array.prototype.slice.call(document.querySelectorAll('.node[data-branch="A"]'));
+    var stubCount = document.querySelectorAll('.node.stub').length;
+    var rects = branchEls.map(function (el) {
+      var r = el.getBoundingClientRect();
+      return { id: el.id, cx: (r.left + r.right) / 2, cy: (r.top + r.bottom) / 2, w: r.width, h: r.height };
+    });
+    var pairs = [];
+    for (var i = 0; i < rects.length; i++) {
+      for (var j = i + 1; j < rects.length; j++) {
+        var a = rects[i], b = rects[j];
+        var dxGap = Math.max(0, Math.abs(a.cx - b.cx) - (a.w + b.w) / 2);
+        var dyGap = Math.max(0, Math.abs(a.cy - b.cy) - (a.h + b.h) / 2);
+        var gap = Math.max(dxGap, dyGap);
+        pairs.push({ a: a.id, b: b.id, gap: gap });
+      }
+    }
+    return { branchCount: branchEls.length, stubCount: stubCount, pairs: pairs };
+  });
+
+  // Guards against Claude Code accidentally deleting a node while fixing spacing.
+  expect(result.branchCount).toBe(7);
+  expect(result.stubCount).toBe(3);
+
+  const offending = result.pairs.filter(function (p) { return p.gap < 24; });
+  if (offending.length) {
+    offending.forEach(function (p) {
+      console.log(p.a + ' and ' + p.b + ' overlap by ' + Math.round(24 - p.gap) + 'px');
+    });
+  }
+  expect(offending.length).toBe(0);
+
+  await context.close();
+});
