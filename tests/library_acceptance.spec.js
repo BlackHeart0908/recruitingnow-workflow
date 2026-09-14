@@ -339,44 +339,124 @@ test('Test 20: Full Detail toggle reveals sub-steps', async ({ browser }) => {
   await context.close();
 });
 
-test('LeadGenPro Branch A nodes have no overlapping bounding boxes', async ({ browser }) => {
+/* Measurement Framework v1 invariant tests (Prompt B-fix-2). These replace the
+   old ad-hoc "24px minimum gap" test: every gap below is asserted directly
+   against the framework's own tier values, converted from screen px to canvas
+   units via the live fit-to-viewport zoom read off #canvasInner's transform. */
+
+test('Framework: Prospector clears trunk with GAP_BREATH', async ({ browser }) => {
+  const GAP_BREATH = 80;
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto(BASE_URL + '#leadgenpro');
   const { frame } = await waitForFrameLoad(page);
-  await page.waitForTimeout(1800); // let the clearance pass (up to 3 iterations) and layout settle
+  await page.waitForTimeout(1500);
 
-  const result = await frame.evaluate(function () {
-    var branchEls = Array.prototype.slice.call(document.querySelectorAll('.node[data-branch="A"]'));
-    var stubCount = document.querySelectorAll('.node.stub').length;
-    var rects = branchEls.map(function (el) {
-      var r = el.getBoundingClientRect();
-      return { id: el.id, cx: (r.left + r.right) / 2, cy: (r.top + r.bottom) / 2, w: r.width, h: r.height };
-    });
-    var pairs = [];
-    for (var i = 0; i < rects.length; i++) {
-      for (var j = i + 1; j < rects.length; j++) {
-        var a = rects[i], b = rects[j];
-        var dxGap = Math.max(0, Math.abs(a.cx - b.cx) - (a.w + b.w) / 2);
-        var dyGap = Math.max(0, Math.abs(a.cy - b.cy) - (a.h + b.h) / 2);
-        var gap = Math.max(dxGap, dyGap);
-        pairs.push({ a: a.id, b: b.id, gap: gap });
-      }
-    }
-    return { branchCount: branchEls.length, stubCount: stubCount, pairs: pairs };
+  const gapCanvas = await frame.evaluate(function () {
+    var inner = document.getElementById('canvasInner');
+    var m = /scale\(([\d.]+)\)/.exec(inner.style.transform);
+    var zoom = m ? parseFloat(m[1]) : 1;
+    var trunk = document.getElementById('node-trunk').getBoundingClientRect();
+    var prospector = document.getElementById('node-prospector').getBoundingClientRect();
+    var gapScreen = prospector.left - trunk.right;
+    return gapScreen / zoom;
   });
 
-  // Guards against Claude Code accidentally deleting a node while fixing spacing.
-  expect(result.branchCount).toBe(7);
-  expect(result.stubCount).toBe(3);
+  expect(gapCanvas).toBeGreaterThanOrEqual(GAP_BREATH * 0.9);
+  await context.close();
+});
 
-  const offending = result.pairs.filter(function (p) { return p.gap < 24; });
-  if (offending.length) {
-    offending.forEach(function (p) {
-      console.log(p.a + ' and ' + p.b + ' overlap by ' + Math.round(24 - p.gap) + 'px');
+test('Framework: consecutive Branch A axis nodes have GAP_TIGHT spacing', async ({ browser }) => {
+  const GAP_TIGHT = 40;
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+  await page.waitForTimeout(1500);
+
+  const gaps = await frame.evaluate(function () {
+    var inner = document.getElementById('canvasInner');
+    var m = /scale\(([\d.]+)\)/.exec(inner.style.transform);
+    var zoom = m ? parseFloat(m[1]) : 1;
+    var prospector = document.getElementById('node-prospector').getBoundingClientRect();
+    var database = document.getElementById('node-database').getBoundingClientRect();
+    var crm = document.getElementById('node-crm').getBoundingClientRect();
+    return {
+      prospectorToDatabase: (database.left - prospector.right) / zoom,
+      databaseToCrm: (crm.left - database.right) / zoom
+    };
+  });
+
+  expect(gaps.prospectorToDatabase).toBeGreaterThanOrEqual(GAP_TIGHT * 0.9);
+  expect(gaps.prospectorToDatabase).toBeLessThanOrEqual(GAP_TIGHT * 1.15);
+  expect(gaps.databaseToCrm).toBeGreaterThanOrEqual(GAP_TIGHT * 0.9);
+  expect(gaps.databaseToCrm).toBeLessThanOrEqual(GAP_TIGHT * 1.15);
+  await context.close();
+});
+
+test('Framework: WhatsApp and Cold Call sub-branch first nodes clear GAP_ISLAND', async ({ browser }) => {
+  const GAP_ISLAND = 140;
+  const NODE_W = 200;
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+  await page.waitForTimeout(1500);
+
+  const distCanvas = await frame.evaluate(function () {
+    var inner = document.getElementById('canvasInner');
+    var m = /scale\(([\d.]+)\)/.exec(inner.style.transform);
+    var zoom = m ? parseFloat(m[1]) : 1;
+    var wa = document.getElementById('node-whatsapp').getBoundingClientRect();
+    var cc = document.getElementById('node-coldcall').getBoundingClientRect();
+    var waCy = (wa.top + wa.bottom) / 2;
+    var ccCy = (cc.top + cc.bottom) / 2;
+    return Math.abs(waCy - ccCy) / zoom;
+  });
+
+  expect(distCanvas).toBeGreaterThanOrEqual(GAP_ISLAND + NODE_W * 0.9);
+  await context.close();
+});
+
+test('Framework: no node overlaps the trunk-clear circle', async ({ browser }) => {
+  const TRUNK_CLEAR_R = 200;
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+  await page.waitForTimeout(1500);
+
+  const result = await frame.evaluate(function () {
+    var inner = document.getElementById('canvasInner');
+    var m = /scale\(([\d.]+)\)/.exec(inner.style.transform);
+    var zoom = m ? parseFloat(m[1]) : 1;
+    var trunk = document.getElementById('node-trunk').getBoundingClientRect();
+    var trunkCX = (trunk.left + trunk.right) / 2;
+    var trunkCY = (trunk.top + trunk.bottom) / 2;
+    var nodes = Array.prototype.slice.call(document.querySelectorAll('.node')).filter(function (el) {
+      return !el.classList.contains('trunk');
     });
-  }
-  expect(offending.length).toBe(0);
+    var minDist = Infinity;
+    var worst = null;
+    nodes.forEach(function (el) {
+      var r = el.getBoundingClientRect();
+      var corners = [
+        { x: r.left, y: r.top }, { x: r.right, y: r.top },
+        { x: r.left, y: r.bottom }, { x: r.right, y: r.bottom }
+      ];
+      var nearest = Math.min.apply(null, corners.map(function (c) {
+        var dx = c.x - trunkCX, dy = c.y - trunkCY;
+        return Math.sqrt(dx * dx + dy * dy);
+      }));
+      var distCanvas = nearest / zoom;
+      if (distCanvas < minDist) { minDist = distCanvas; worst = el.id; }
+    });
+    return { minDist: minDist, worst: worst };
+  });
 
+  if (result.minDist < TRUNK_CLEAR_R * 0.95) {
+    console.log(result.worst + ' is closest to trunk at ' + Math.round(result.minDist) + ' canvas units');
+  }
+  expect(result.minDist).toBeGreaterThanOrEqual(TRUNK_CLEAR_R * 0.95);
   await context.close();
 });

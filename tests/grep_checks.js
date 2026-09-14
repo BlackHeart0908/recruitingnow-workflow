@@ -222,6 +222,39 @@ checkMinHits('public/workflows/leadgenpro.html', 'Overview vs Full Detail split 
   }
 })();
 
+/* Check M: framework block present */
+checkMinHits('public/workflows/leadgenpro.html', 'MEASUREMENT FRAMEWORK v1', 1, 'Check M');
+
+/* Check N: constants derived, not hardcoded */
+[
+  'GAP_TIGHT',
+  'GAP_BREATH',
+  'GAP_ISLAND',
+  'GAP_SECTOR',
+  'TRUNK_CLEAR_R',
+  'BRANCH_START_R',
+  'BRANCH_NODE_STEP',
+  'SUB_FORK_ANGLE'
+].forEach(function (name) {
+  checkMinHits('public/workflows/leadgenpro.html', name, 1, 'Check N');
+});
+
+/* Check O: BRANCH_START_R is derived, not a literal */
+checkMinHits(
+  'public/workflows/leadgenpro.html',
+  'BRANCH_START_R\\s*=\\s*TRUNK_CLEAR_R\\s*\\+\\s*NODE_W\\s*/\\s*2',
+  1,
+  'Check O'
+);
+
+/* Check P: aggressive clearance pass removed, warn-only invariant check present */
+checkNoPatterns(
+  'public/workflows/leadgenpro.html',
+  ['enforceClearance', 'pushBranchOutward'],
+  'Check P'
+);
+checkMinHits('public/workflows/leadgenpro.html', 'checkLayoutInvariants', 1, 'Check P');
+
 if (failures.length) {
   console.error('grep_checks.js: ' + failures.length + ' failure(s):');
   failures.forEach(function (f) { console.error('  - ' + f); });
