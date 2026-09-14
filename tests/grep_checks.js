@@ -152,6 +152,76 @@ checkNoStrings(
   walk(path.join(ROOT, 'public'));
 })();
 
+/* Check H: LeadGenPro file existence + core symbols */
+[
+  'wf-menu-btn',
+  'postMessage',
+  'TRUNK_CX',
+  'polar\\(',
+  'Leadgenpro',
+  '--accent:#7C3AED'
+].forEach(function (pattern) {
+  checkMinHits('public/workflows/leadgenpro.html', pattern, 1, 'Check H');
+});
+
+/* Check I: LeadGenPro forbidden strings */
+(function checkLeadgenproForbidden(){
+  var relPath = 'public/workflows/leadgenpro.html';
+  var content = readFile(relPath);
+  if (content.indexOf(EM_DASH) !== -1) {
+    var idx = content.indexOf(EM_DASH);
+    var line = content.substring(0, idx).split('\n').length;
+    failures.push('Check I: em dash (U+2014) found in ' + relPath + ' near line ' + line);
+  }
+  ['RecruitingNOW', 'Andreas'].forEach(function (s) {
+    if (content.indexOf(s) !== -1) {
+      failures.push('Check I: found "' + s + '" in ' + relPath);
+    }
+  });
+  if (/postMessage\(.*,\s*['"]\*['"]/.test(content)) {
+    failures.push('Check I: wildcard postMessage target found in ' + relPath);
+  }
+})();
+
+/* Check J: LeadGenPro node completeness */
+[
+  'Prospector',
+  'Lead Database',
+  'CRM',
+  'WhatsApp Web',
+  'Cold Call',
+  'Call Analyzer',
+  'AI Coach',
+  'ProspectIQ + Apollo + Email',
+  'LinkedIn Radar + Apollo + Email',
+  'IT Staffing + Email'
+].forEach(function (title) {
+  var pattern = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  checkMinHits('public/workflows/leadgenpro.html', pattern, 1, 'Check J');
+});
+
+/* Check K: split-rule comment present */
+checkMinHits('public/workflows/leadgenpro.html', 'Overview vs Full Detail split rule', 1, 'Check K');
+
+/* Check L: registry entry */
+(function checkRegistryEntry(){
+  var json = JSON.parse(readFile('public/workflows.json'));
+  var entry = json.filter(function (e) { return e.id === 'leadgenpro'; })[0];
+  if (!entry) {
+    failures.push('Check L: leadgenpro entry missing from workflows.json');
+    return;
+  }
+  if (entry.title !== 'Leadgenpro') {
+    failures.push('Check L: title mismatch, expected "Leadgenpro", got "' + entry.title + '"');
+  }
+  if (entry.accent !== '#7C3AED') {
+    failures.push('Check L: accent mismatch, expected "#7C3AED", got "' + entry.accent + '"');
+  }
+  if (entry.subtitle !== 'Multi Channel Ai native Lead generation and outbound automation platform') {
+    failures.push('Check L: subtitle mismatch, got "' + entry.subtitle + '"');
+  }
+})();
+
 if (failures.length) {
   console.error('grep_checks.js: ' + failures.length + ' failure(s):');
   failures.forEach(function (f) { console.error('  - ' + f); });

@@ -1,0 +1,1046 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leadgenpro</title>
+<!--
+  Overview vs Full Detail split rule (for the future PIN gate, not yet enforced):
+    UNLOCKED (Overview surface): branch names, node titles, one-line subtitles, high-level flow arrows.
+    LOCKED (behind PIN, added in a later prompt): tooltip WHAT+WHY, Full Detail sub-steps, stored fields, model names, prompt structure, thresholds, connection types.
+  Both are shipped open for now. When the PIN gate build lands, LOCKED content moves behind AES-decrypt-in-browser or a Cloudflare Pages Function.
+-->
+<!--
+  Standing pattern for LeadGenPro branch expansions (Prompts C, D, E):
+    Each new branch is authored inside THIS file, not a new file.
+    The stub node for that branch is REPLACED IN PLACE with the full branch's node chain.
+    Branch axes are fixed at 0 / 90 / 180 / 270 degrees; do not add more branches without a fresh design pass.
+    Every branch node inherits the same copy discipline: on point, no fluff, no AI hedges, no em dashes.
+    Every branch that ships marks its stub's tag removed and its opacity restored to 1.
+-->
+<style>
+:root{
+  --bg-900:#0F1113;
+  --bg-800:#161A1D;
+  --bg-700:#1F2428;
+  --bg-600:#2A3036;
+  --accent:#7C3AED;
+  --accent-lt:#9F6BFF;
+  --accent-dk:#5B21B6;
+  --accent-dim:#3A226B;
+  --accent-glow:rgba(124,107,240,.35);
+  --ink:#FFFFFF;
+  --ink-mute:#9BA6AB;
+  --ink-dim:#6B7579;
+  --border:rgba(255,255,255,.08);
+  --ok:#4FA97F;
+  --warn:#E8B33C;
+  --dashed-border:rgba(255,255,255,.28);
+}
+*{box-sizing:border-box;}
+html,body{height:100%;margin:0;padding:0;overflow:hidden;background:var(--bg-900);}
+body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);}
+
+#topbar{position:fixed;top:0;left:0;right:0;height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;z-index:50;background:linear-gradient(180deg, rgba(15,17,19,.97), rgba(15,17,19,.9));border-bottom:1px solid var(--border);gap:12px;}
+.topbar-left{display:flex;align-items:center;min-width:0;}
+.topbar-center{display:flex;align-items:center;justify-content:center;flex:1;min-width:0;}
+.topbar-right{display:flex;align-items:center;gap:10px;}
+
+.wf-menu-btn{appearance:none;border:none;background:transparent;color:var(--ink-mute);width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-right:10px;cursor:pointer;font-family:inherit;transition:background .2s,color .2s;flex:none;}
+.wf-menu-btn:hover{background:var(--bg-600);color:var(--ink);}
+.wf-menu-btn svg{width:18px;height:18px;}
+
+.wf-title-block{font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.15;white-space:nowrap;}
+.wf-title{font-size:12.5px;font-weight:600;color:var(--ink);}
+.wf-subtitle{font-weight:400;font-size:9.5px;color:var(--ink-mute);margin-top:1px;}
+
+.modeToggle{display:flex;background:var(--bg-700);border:1px solid var(--accent-dim);border-radius:7px;padding:2px;gap:2px;}
+.seg{appearance:none;border:none;background:transparent;color:var(--ink-mute);font-size:11.5px;font-weight:600;padding:5px 12px;border-radius:5px;cursor:pointer;font-family:inherit;transition:background .25s,color .25s;}
+.seg.active{background:var(--accent);color:var(--ink);}
+.seg:not(.active):hover{color:var(--ink);}
+
+.zoomControls{display:flex;align-items:center;gap:3px;background:var(--bg-700);border:1px solid var(--accent-dim);border-radius:7px;padding:2px 3px;}
+.zbtn{appearance:none;border:none;background:transparent;color:var(--ink-mute);font-size:13px;font-weight:700;width:20px;height:20px;border-radius:4px;cursor:pointer;font-family:inherit;line-height:1;display:flex;align-items:center;justify-content:center;}
+.zbtn:hover{background:var(--bg-600);color:var(--ink);}
+.zbtn-reset{width:auto;padding:0 7px;font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;}
+.zoomPct{font-size:10px;color:var(--ink-mute);font-variant-numeric:tabular-nums;min-width:30px;text-align:center;}
+
+#canvasViewport{position:fixed;top:0;left:0;right:0;bottom:0;overflow:hidden;cursor:grab;background:var(--bg-900);user-select:none;-webkit-user-select:none;touch-action:none;}
+#canvasViewport.dragging{cursor:grabbing;}
+#canvasInner{position:absolute;left:0;top:0;transform-origin:0 0;}
+#pipesSvg{position:absolute;left:0;top:0;overflow:visible;}
+#nodesLayer{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;}
+
+.node{position:absolute;pointer-events:auto;cursor:pointer;background:linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,0) 40%), var(--bg-800);border:1.5px solid var(--accent-dim);border-radius:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.10), 0 8px 24px rgba(0,0,0,.35);transition:border-color .4s,box-shadow .4s,transform .3s,opacity .4s;}
+.node.selected{transform:translateY(-3px);border-color:var(--accent);box-shadow:inset 0 1px 0 rgba(255,255,255,.12), 0 0 0 2px var(--accent), 0 16px 36px rgba(0,0,0,.45), 0 0 34px var(--accent-glow);}
+.node-header{padding:14px 15px 12px;}
+.node-title{font-size:16px;font-weight:600;color:var(--ink);line-height:1.28;min-height:21px;}
+.node-subtitle{font-size:12.5px;font-weight:400;color:var(--ink-mute);margin-top:5px;line-height:1.42;}
+.counters{display:flex;gap:18px;margin-top:12px;flex-wrap:wrap;}
+.counter{display:flex;flex-direction:column;gap:3px;min-width:60px;}
+.counter-label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-mute);}
+.counter-value{font-size:15px;font-weight:700;color:var(--accent-lt);font-variant-numeric:tabular-nums;}
+
+.node.trunk{width:240px;height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,0) 45%), var(--accent);border:2px solid var(--accent-lt);box-shadow:inset 0 0 40px var(--accent-glow), 0 12px 30px rgba(0,0,0,.4);z-index:5;}
+.node.trunk .node-header{padding:0;display:flex;flex-direction:column;align-items:center;}
+.node.trunk .node-title{font-size:22px;font-weight:700;color:var(--ink);min-height:0;}
+.node.trunk .node-subtitle{font-size:11px;color:rgba(255,255,255,.82);margin-top:4px;}
+.node.trunk .counters{justify-content:center;margin-top:8px;}
+.node.trunk .counter{align-items:center;}
+.node.trunk .counter-label{color:rgba(255,255,255,.72);}
+.node.trunk .counter-value{color:var(--ink);}
+
+.node.stub{opacity:.42;border-style:dashed;border-color:var(--dashed-border);}
+.node.stub .node-title{font-size:14px;}
+.node.stub .node-subtitle{font-size:11.5px;}
+.stub-tag{position:absolute;top:-9px;left:12px;background:var(--ink-mute);color:var(--bg-900);font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:10px;z-index:2;}
+
+.human-in-loop-badge{position:absolute;top:-9px;right:-9px;width:20px;height:20px;border-radius:50%;background:var(--warn);color:var(--bg-900);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.4);z-index:3;}
+.human-in-loop-badge svg{display:block;}
+
+.minor-wrap{padding:0 15px;max-height:0;overflow:hidden;transition:max-height .45s cubic-bezier(.4,0,.2,1);}
+.minor-inner{padding-bottom:14px;}
+.minor-steps{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:7px;}
+.minor-steps li{display:flex;align-items:flex-start;gap:8px;}
+.minor-steps .dot{width:5px;height:5px;margin-top:6px;border-radius:50%;background:var(--accent-dim);flex:none;}
+.minor-steps .txt{font-size:12px;line-height:1.5;color:var(--ink-mute);}
+
+.pipe path{fill:none;stroke:var(--accent-dim);stroke-width:2;opacity:.55;}
+.pipe-trunk-branch path{stroke-width:2.4;opacity:.65;}
+.pipe-sub path{stroke-width:1.6;opacity:.5;}
+.pipe-feedback path{stroke:var(--ok);stroke-dasharray:7 7;opacity:.8;}
+.pipe .particle{fill:var(--accent-lt);filter:drop-shadow(0 0 2.5px var(--accent-glow));}
+.arrow-fill-main{fill:var(--accent-dim);}
+.arrow-fill-ok{fill:var(--ok);}
+
+.tooltip{position:fixed;display:none;width:280px;background:var(--bg-700);border:1px solid var(--accent-dim);border-radius:10px;padding:14px 16px;box-shadow:0 16px 40px rgba(0,0,0,.5);z-index:200;pointer-events:none;}
+.tt-row{margin-bottom:10px;}
+.tt-row:last-child{margin-bottom:0;}
+.tt-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent-lt);font-weight:700;margin-bottom:3px;}
+.tt-value{font-size:14px;line-height:1.45;color:var(--ink);}
+
+.detail-panel{position:fixed;top:44px;right:0;bottom:0;width:400px;background:var(--bg-700);border-left:1px solid var(--accent-dim);transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);z-index:70;overflow-y:auto;box-shadow:-10px 0 30px rgba(0,0,0,.35);}
+.detail-panel.open{transform:translateX(0);}
+.dp-close{position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.04);color:var(--ink-mute);font-size:17px;line-height:1;cursor:pointer;}
+.dp-close:hover{color:var(--ink);border-color:rgba(255,255,255,.28);}
+.dp-body{padding:54px 26px 32px;}
+.dp-tag{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent-lt);font-weight:700;margin-bottom:6px;}
+.dp-body h2{font-size:20px;margin:0 0 20px;color:var(--ink);}
+.dp-section{margin-bottom:22px;}
+.dp-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent-lt);font-weight:700;margin-bottom:6px;}
+.dp-section p{font-size:14px;line-height:1.55;color:var(--ink);margin:0;}
+.dp-counters{display:flex;flex-wrap:wrap;gap:20px;}
+.dp-counter{display:flex;flex-direction:column;gap:4px;}
+.dp-counter-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-mute);}
+.dp-counter-value{font-size:22px;font-weight:700;color:var(--accent-lt);font-variant-numeric:tabular-nums;}
+.dp-minor-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;}
+.dp-minor-list li{display:flex;align-items:flex-start;gap:9px;font-size:13px;line-height:1.5;color:var(--ink-mute);}
+.dp-minor-list .dot{width:5px;height:5px;margin-top:6px;border-radius:50%;background:var(--accent-dim);flex:none;}
+
+.footer{position:fixed;right:16px;bottom:10px;font-size:11px;color:var(--ink-dim);z-index:45;pointer-events:none;}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="topbar-left">
+    <!-- library nav button, required in every workflow -->
+    <button class="wf-menu-btn" id="wfMenuBtn" aria-label="Toggle library sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <div class="wf-title-block">
+      <div class="wf-title">Leadgenpro</div>
+      <div class="wf-subtitle">Live system, illustrative scale</div>
+    </div>
+  </div>
+  <div class="topbar-center">
+    <div class="modeToggle">
+      <button id="btnMajor" class="seg active" aria-pressed="true" type="button">Overview</button>
+      <button id="btnMinor" class="seg" aria-pressed="false" type="button">Full detail</button>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="zoomControls">
+      <button id="zoomOut" class="zbtn" type="button" title="Zoom out (-)">&minus;</button>
+      <span id="zoomPct" class="zoomPct">100%</span>
+      <button id="zoomIn" class="zbtn" type="button" title="Zoom in (+)">+</button>
+      <button id="zoomReset" class="zbtn zbtn-reset" type="button" title="Reset zoom (0)">Reset</button>
+    </div>
+  </div>
+</div>
+
+<div id="canvasViewport">
+  <div id="canvasInner">
+    <svg id="pipesSvg"></svg>
+    <div id="nodesLayer"></div>
+  </div>
+</div>
+
+<div class="detail-panel" id="detailPanel">
+  <button class="dp-close" id="dpClose" type="button" aria-label="Close detail panel">&times;</button>
+  <div class="dp-body">
+    <div class="dp-tag" id="dpTag"></div>
+    <h2 id="dpTitle"></h2>
+    <div class="dp-section" id="dpWhatSection">
+      <div class="dp-label">What it does</div>
+      <p id="dpWhat"></p>
+    </div>
+    <div class="dp-section" id="dpWhySection">
+      <div class="dp-label">Why it is running</div>
+      <p id="dpWhy"></p>
+    </div>
+    <div class="dp-section" id="dpCountersSection">
+      <div class="dp-label">Illustrative counters</div>
+      <div class="dp-counters" id="dpCounters"></div>
+    </div>
+    <div class="dp-section" id="dpMinorSection">
+      <div class="dp-label">Inside this node</div>
+      <ul class="dp-minor-list" id="dpMinorList"></ul>
+    </div>
+    <div class="dp-section" id="dpStubSection">
+      <p id="dpStubText"></p>
+    </div>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip">
+  <div class="tt-row"><div class="tt-label">What it does</div><div class="tt-value" id="ttWhat"></div></div>
+  <div class="tt-row"><div class="tt-label">Why it is running</div><div class="tt-value" id="ttWhy"></div></div>
+</div>
+
+<div class="footer">Illustrative scale, not live data.</div>
+
+<script>
+(function(){
+'use strict';
+
+var NS = 'http://www.w3.org/2000/svg';
+var SIM_SPEED = 1.4;
+var LOOP_DUR = 90 / SIM_SPEED;
+var EASE_WINDOW = 2;
+
+/* ---------- radial layout engine constants ---------- */
+var TRUNK_CX = 1400;              // trunk center x
+var TRUNK_CY = 900;               // trunk center y
+var TRUNK_W = 240;                // trunk pill width
+var TRUNK_H = 90;                 // trunk pill height
+var BRANCH_START_R = 220;         // radial distance from trunk center to first node of a branch
+var BRANCH_NODE_STEP = 210;       // additional radial distance per subsequent node along a branch
+var SUB_BRANCH_ANGLE_OFFSET = 35; // degrees the sub-branch axis diverges from its parent branch axis
+var STUB_R = 340;                 // radial distance from trunk center to a dimmed stub node
+var CANVAS_W = 2800;              // total canvas width
+var CANVAS_H = 1800;              // total canvas height
+var SIDE_PAD = 24;
+var TOPBAR_H = 44;
+var NODE_W = 230;
+
+var BRANCH_AXIS = { A: 0, B: 90, C: 180, D: 270 };
+
+function polar(cx, cy, r, deg){
+  var rad = deg * Math.PI / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+/* ---------- node + connection data ---------- */
+var NODES = [
+  {
+    id:'trunk', kind:'trunk', title:'Leadgenpro', subtitle:'Multi Channel Platform',
+    counters:[
+      { id:'branches', label:'Branches live', type:'fixed', value:'1 of 4', fmt:'text' }
+    ],
+    minor:['4 branches total. A live (this build). B, C, D scheduled.'],
+    tooltip:{
+      what:'A tree of independent branches. Each branch is its own closed loop for lead sourcing, storage, enrichment, and outreach.',
+      why:'Different lead types come from different places and need different playbooks. One monolithic pipeline would force every lead through the same steps, which loses the signal.'
+    }
+  },
+
+  {
+    id:'prospector', kind:'node', branchId:'A', radialStep:1, angleOffset:0,
+    title:'Prospector', subtitle:'Serper + Google Places lead finder',
+    counters:[
+      { id:'found', label:'Leads found today', type:'gauge', mean:100, min:60, max:140, vol:9, fmt:'int' },
+      { id:'scored', label:'Score >= 70', type:'cumulative', seed:20, rate:[0.19,0.39], fmt:'int' }
+    ],
+    minor:[
+      'Serper API call by niche and city',
+      'Google Places lookup for hits',
+      'Website scan for tech and contact details',
+      'Dedup against the master directory',
+      'Buyer Engine scores each lead on pay and need signals'
+    ],
+    tooltip:{
+      what:'Finds businesses by niche and city via Serper and Google Places, scores each with the Buyer Engine on pay and need signals.',
+      why:'Cold discovery sits at the top of the funnel. Noise here compounds downstream, so every lead gets a score before it enters the pipeline.'
+    }
+  },
+  {
+    id:'database', kind:'node', branchId:'A', radialStep:2, angleOffset:0,
+    title:'Lead Database', subtitle:'Per-tenant SQLite, master dedup, suppressed ledger',
+    counters:[
+      { id:'total', label:'Total leads', type:'fixed', value:8247, fmt:'int-comma' },
+      { id:'deduped', label:'Deduped today', type:'cumulative', seed:0, rate:[0.53,0.81], fmt:'int' }
+    ],
+    minor:[
+      'Per-tenant SQLite via storage.py',
+      'Cross-tenant master directory for dedup',
+      'Suppressed-leads ledger',
+      'Byte-atomic writes with a per-store lock',
+      'Migrated from JSON in v3.0'
+    ],
+    tooltip:{
+      what:'Per-tenant SQLite store. Cross-tenant master directory catches duplicates. Suppressed-leads ledger blocks anyone who opted out from ever being contacted again.',
+      why:'Tenant data isolation is non-negotiable. One shared store would leak leads across users, one JSON file would corrupt at write time under real load.'
+    }
+  },
+  {
+    id:'crm', kind:'node', branchId:'A', radialStep:3, angleOffset:0,
+    title:'CRM', subtitle:'Pipeline, follow-ups, filters, drawer',
+    counters:[
+      { id:'pipeline', label:'Active pipeline', type:'gauge', mean:220, min:180, max:260, vol:12, fmt:'int' },
+      { id:'followups', label:'Follow-ups due', type:'meanrevert', mean:20, min:12, max:28, vol:3, fmt:'int' }
+    ],
+    minor:[
+      'Pipeline stages via _STAGE_ORDER, promote-only',
+      'Follow-up log with outcome, mistake category, and self-rating',
+      'Filters by buyer signal, intent, warmth, or tag',
+      'Lead drawer with full history'
+    ],
+    tooltip:{
+      what:'Pipeline stages that flow one way (promote only). Follow-up log with outcome, mistake category, and self-rating. Filters by buyer signal, intent, warmth, or tag. Lead drawer holds full history.',
+      why:'Manual stage demotion would let a bad self-review erase real progress. One-way flow keeps the pipeline honest.'
+    }
+  },
+  {
+    id:'whatsapp', kind:'node', branchId:'A', radialStep:4, angleOffset:-SUB_BRANCH_ANGLE_OFFSET,
+    title:'WhatsApp Web', subtitle:'Extension-driven, batch and break, inbound watcher',
+    counters:[
+      { id:'sent', label:'Sent today', type:'cumulative', seed:0, rate:[0.40,0.75], fmt:'int' },
+      { id:'replyrate', label:'Reply rate', type:'meanrevert', mean:11, min:8, max:14, vol:1, fmt:'pct0' }
+    ],
+    minor:[
+      'Chrome MV3 extension on a pinned WhatsApp tab',
+      'Cadence engine runs on chrome.alarms',
+      'Sends cluster in 3-5-message bursts, then 30-40 min deep-idles',
+      'Inbound reply watcher on pane-side and open chat',
+      'Delivery confirmed via MutationObserver'
+    ],
+    tooltip:{
+      what:'A Chrome extension drives a pinned WhatsApp tab. Sends cluster in 3-5 message bursts, then the pipe rests 30-40 minutes. Inbound replies are read from pane-side and classified in real time.',
+      why:'WhatsApp Web bans accounts that look automated. Batch-and-break mimics a human running the pipe in bursts. Persistent inbound watcher catches replies that arrive hours later.'
+    }
+  },
+  {
+    id:'coldcall', kind:'node', branchId:'A', radialStep:4, angleOffset:SUB_BRANCH_ANGLE_OFFSET, badge:'human',
+    title:'Cold Call', subtitle:'Human dial, follow-up log',
+    counters:[
+      { id:'calls', label:'Calls today', type:'cumulative', seed:0, rate:[0.20,0.40], fmt:'int' },
+      { id:'live', label:'Live conversations', type:'gauge', mean:3, min:0, max:6, vol:1.2, fmt:'int' }
+    ],
+    minor:[
+      'Manual dial from the operator’s own phone',
+      'Follow-up entry captures outcome, self-rating, mistake category, and notes',
+      'Entry attributes a loss as SKILL vs LEAD',
+      'Downstream analyzer picks up every entry'
+    ],
+    tooltip:{
+      what:'Aakash dials from his phone. Every call ends with a follow-up entry: outcome, self-rating, mistake category, notes. Manual entry only.',
+      why:'The value is not in the call itself, it is in the honest signal the call generates. Manual entry keeps the signal grounded.'
+    }
+  },
+  {
+    id:'analyzer', kind:'node', branchId:'A', radialStep:5, angleOffset:SUB_BRANCH_ANGLE_OFFSET,
+    title:'Call Analyzer', subtitle:'LLM tags each follow-up, 16 mistake categories',
+    counters:[
+      { id:'tagged', label:'Follow-ups tagged', type:'cumulative', seed:0, rate:[0.078,0.14], fmt:'int' },
+      { id:'skillfail', label:'Skill-fail rate', type:'meanrevert', mean:30, min:22, max:38, vol:2.5, fmt:'pct0' }
+    ],
+    minor:[
+      'LLM tags each follow-up with one of 16 mistake categories',
+      'Extracts buyer signals from the follow-up text',
+      'Records the attribution reason, SKILL vs LEAD',
+      'Routes through the llm_router pooled provider, Groq gpt-oss-120b lane'
+    ],
+    tooltip:{
+      what:'An LLM tags each follow-up with one of 16 mistake categories, extracts buyer signals, and records why the attribution went SKILL vs LEAD. Runs on a pooled Groq gpt-oss-120b lane.',
+      why:'A human self-rating is noisy. An LLM comparing the self-rating to the actual outcome catches the I-bombed-but-marked-it-good cases.'
+    }
+  },
+  {
+    id:'coach', kind:'node', branchId:'A', radialStep:6, angleOffset:20,
+    title:'AI Coach', subtitle:'Weekly digest, fail split, skill vs lead diagnosis',
+    counters:[
+      { id:'digests', label:'Weekly digests sent', type:'fixed', value:34, fmt:'int' },
+      { id:'nudges', label:'Nudges queued', type:'gauge', mean:5, min:2, max:8, vol:1, fmt:'int' }
+    ],
+    minor:[
+      'Weekly digest generated in the ADVISOR_SOUL voice',
+      'Fail split, skill vs lead',
+      'Skill-fail breakdown by category',
+      'Consistency vs daily target',
+      'Pipeline buyer-quality, nudges surfaced in the dashboard'
+    ],
+    tooltip:{
+      what:'Weekly digest in ADVISOR_SOUL voice. Fail split by attribution. Skill-fail breakdown by category. Consistency vs daily target. Pipeline buyer-quality. Nudges land on the dashboard.',
+      why:'Data without prescription is noise. The coach reads the data and says what to do differently next week, in a voice built to sound like a partner not a report.'
+    }
+  },
+
+  {
+    id:'stubB', kind:'stub', branchId:'B',
+    title:'ProspectIQ + Apollo + Email', subtitle:'Company discovery, contact enrichment, cold email',
+    stubMessage:'Company discovery through ProspectIQ, contact enrichment through the Apollo API, then routed to a shared cold email outreach node. Ships in an upcoming release of the Workflow Library.'
+  },
+  {
+    id:'stubC', kind:'stub', branchId:'C',
+    title:'LinkedIn Radar + Apollo + Email', subtitle:'Hiring-intent capture, research-personalized email',
+    stubMessage:'Captures hiring-intent posts from LinkedIn, enriches the poster through Apollo, then runs a research-personalized cold email tailored to the requirement they posted. Ships in an upcoming release.'
+  },
+  {
+    id:'stubD', kind:'stub', branchId:'D',
+    title:'IT Staffing + Email', subtitle:'Manual sheet ingest, stream routing, cold email',
+    stubMessage:'Manual ingest of a sourced staffing sheet, LLM-classified into three opportunity streams, routed to the shared cold email outreach node. Ships in an upcoming release.'
+  }
+];
+
+var BRANCH_A_IDS = ['prospector','database','crm','whatsapp','coldcall','analyzer','coach'];
+
+var CONNECTIONS = [
+  { id:'tb-a', from:'trunk', to:'prospector', kind:'trunk-branch' },
+  { id:'tb-b', from:'trunk', to:'stubB', kind:'trunk-branch' },
+  { id:'tb-c', from:'trunk', to:'stubC', kind:'trunk-branch' },
+  { id:'tb-d', from:'trunk', to:'stubD', kind:'trunk-branch' },
+  { id:'m1', from:'prospector', to:'database', kind:'main' },
+  { id:'m2', from:'database', to:'crm', kind:'main' },
+  { id:'s1', from:'crm', to:'whatsapp', kind:'sub' },
+  { id:'s2', from:'crm', to:'coldcall', kind:'sub' },
+  { id:'l1', from:'coldcall', to:'analyzer', kind:'linear' },
+  { id:'l2', from:'analyzer', to:'coach', kind:'linear' },
+  { id:'fb1', from:'coach', to:'crm', kind:'feedback' }
+];
+
+/* ---------- state ---------- */
+var NODE_BY_ID = {};
+var nodeHeights = {};
+var counterState = {};
+var pinnedNode = null;
+var currentTooltipNode = null;
+var minorMode = false;
+var modeVersion = 0;
+var simTime = 0;
+var lastFrameTs = null;
+var frameCount = 0;
+var zoom = 1, panX = 0, panY = 0;
+var isDragging = false, dragMoved = false;
+var dragStartClientX = 0, dragStartClientY = 0, dragStartPanX = 0, dragStartPanY = 0;
+
+/* ---------- small helpers ---------- */
+function randRange(a,b){ return a + Math.random()*(b-a); }
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, function(ch){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+  });
+}
+function fmtCounter(c, v){
+  switch(c.fmt){
+    case 'int': return String(Math.round(v));
+    case 'int-comma': return Math.round(v).toLocaleString('en-US');
+    case 'pct0': return Math.round(v)+'%';
+    case 'pct1': return v.toFixed(1)+'%';
+    case 'dec1': return v.toFixed(1);
+    case 'text': return String(v);
+    default: return String(v);
+  }
+}
+function smoothPath(x1,y1,x2,y2){
+  var dx = x2-x1, dy = y2-y1;
+  if(Math.abs(dx) >= Math.abs(dy)){
+    var c = dx*0.5;
+    return 'M'+x1+','+y1+' C'+(x1+c)+','+y1+' '+(x2-c)+','+y2+' '+x2+','+y2;
+  } else {
+    var c2 = dy*0.5;
+    return 'M'+x1+','+y1+' C'+x1+','+(y1+c2)+' '+x2+','+(y2-c2)+' '+x2+','+y2;
+  }
+}
+function rectBorderPoint(cx, cy, w, h, tx, ty){
+  var dx = tx-cx, dy = ty-cy;
+  if(dx===0 && dy===0) return { x:cx, y:cy };
+  var hw = w/2, hh = h/2;
+  var scaleX = dx!==0 ? hw/Math.abs(dx) : Infinity;
+  var scaleY = dy!==0 ? hh/Math.abs(dy) : Infinity;
+  var scale = Math.min(scaleX, scaleY);
+  return { x: cx+dx*scale, y: cy+dy*scale };
+}
+
+/* ---------- radial layout ----------
+   Every node carries a base { branchId, radialStep, angleOffset } triple (trunk and
+   stub nodes are special cases). layoutNodes() computes each node's polar center point
+   from those plus the branch axis angle and the trunk center. finalizeLayout() then
+   measures each node's real rendered height (measure-then-place, never a guessed
+   constant) and positions its DOM box centered on that point. */
+function layoutNodes(){
+  NODES.forEach(function(n){
+    if(n.kind==='trunk'){
+      n.cx = TRUNK_CX; n.cy = TRUNK_CY; n.w = TRUNK_W;
+    } else if(n.kind==='stub'){
+      var axis = BRANCH_AXIS[n.branchId];
+      var p = polar(TRUNK_CX, TRUNK_CY, STUB_R, axis);
+      n.cx = p.x; n.cy = p.y; n.w = NODE_W;
+    } else {
+      var axis2 = BRANCH_AXIS[n.branchId];
+      var r = BRANCH_START_R + (n.radialStep-1)*BRANCH_NODE_STEP;
+      var p2 = polar(TRUNK_CX, TRUNK_CY, r, axis2 + n.angleOffset);
+      n.cx = p2.x; n.cy = p2.y; n.w = NODE_W;
+    }
+  });
+}
+
+function measureNodeHeights(){
+  NODES.forEach(function(n){
+    var el = document.getElementById('node-'+n.id);
+    if(!el) return;
+    var headerH = el.offsetHeight;
+    var expandedExtra = 0;
+    if(n.minor){
+      var wrap = document.getElementById('minorwrap-'+n.id);
+      renderMinorContent(n, wrap);
+      expandedExtra = wrap.scrollHeight;
+      wrap.innerHTML = '';
+    }
+    nodeHeights[n.id] = { header: headerH, expanded: headerH + expandedExtra };
+  });
+}
+
+function finalizeLayout(){
+  measureNodeHeights();
+  NODES.forEach(function(n){
+    var el = document.getElementById('node-'+n.id);
+    if(!el) return;
+    var h = n.kind==='trunk' ? TRUNK_H : nodeHeights[n.id].header;
+    n.h = h;
+    n.x = n.cx - n.w/2;
+    n.y = n.cy - h/2;
+    el.style.left = n.x+'px';
+    el.style.top = n.y+'px';
+  });
+}
+
+/* ---------- build: node DOM ---------- */
+function buildNodes(){
+  var layer = document.getElementById('nodesLayer');
+  NODES.forEach(function(n){
+    var el = document.createElement('div');
+    var cls = 'node';
+    if(n.kind==='trunk') cls += ' trunk';
+    if(n.kind==='stub') cls += ' stub';
+    el.className = cls;
+    el.id = 'node-'+n.id;
+    if(n.branchId==='A') el.setAttribute('data-branch','A');
+    el.style.width = n.w+'px';
+    el.style.left = (n.cx - n.w/2)+'px';
+    el.style.top = (n.cy - 40)+'px';
+
+    if(n.kind==='stub'){
+      var tag = document.createElement('div');
+      tag.className = 'stub-tag';
+      tag.textContent = 'COMING NEXT';
+      el.appendChild(tag);
+    }
+
+    if(n.badge==='human'){
+      var badge = document.createElement('span');
+      badge.className = 'human-in-loop-badge';
+      badge.title = 'Human in the loop';
+      badge.setAttribute('aria-label','Human in the loop');
+      badge.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"></circle><path d="M5.5 20v-1.4A5.6 5.6 0 0 1 11.1 13h1.8a5.6 5.6 0 0 1 5.6 5.6V20"></path></svg>';
+      el.appendChild(badge);
+    }
+
+    var header = document.createElement('div');
+    header.className = 'node-header';
+    header.innerHTML =
+      '<div class="node-title">'+escapeHtml(n.title)+'</div>'+
+      (n.subtitle ? '<div class="node-subtitle">'+escapeHtml(n.subtitle)+'</div>' : '');
+    el.appendChild(header);
+
+    if(n.counters && n.counters.length){
+      var countersDiv = document.createElement('div');
+      countersDiv.className = 'counters';
+      n.counters.forEach(function(c){
+        var cEl = document.createElement('div');
+        cEl.className = 'counter';
+        cEl.innerHTML =
+          '<div class="counter-label">'+escapeHtml(c.label)+'</div>'+
+          '<div class="counter-value" id="cv-'+n.id+'-'+c.id+'">-</div>';
+        countersDiv.appendChild(cEl);
+      });
+      header.appendChild(countersDiv);
+    }
+
+    if(n.minor){
+      var wrap = document.createElement('div');
+      wrap.className = 'minor-wrap';
+      wrap.id = 'minorwrap-'+n.id;
+      el.appendChild(wrap);
+    }
+
+    el.addEventListener('mouseenter', function(){ if(n.tooltip) showTooltip(n, el); });
+    el.addEventListener('mouseleave', hideTooltip);
+    el.addEventListener('click', function(e){ e.stopPropagation(); openPanel(n); });
+
+    layer.appendChild(el);
+  });
+}
+
+/* ---------- build: SVG defs (arrowheads) ---------- */
+function buildSvgDefs(){
+  var svg = document.getElementById('pipesSvg');
+  var defs = document.createElementNS(NS,'defs');
+  defs.innerHTML =
+    '<marker id="mArrowMain" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" class="arrow-fill-main"></path></marker>'+
+    '<marker id="mArrowOk" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" class="arrow-fill-ok"></path></marker>';
+  svg.appendChild(defs);
+}
+
+/* ---------- build: SVG pipes ----------
+   Every edge is a real SVG path. Endpoints are the node rectangle's own border,
+   found by projecting toward the other node's center, so a pipe always starts and
+   ends right at a node's edge regardless of the two nodes' relative angle. */
+function buildPipesSvg(){
+  var svg = document.getElementById('pipesSvg');
+  svg.setAttribute('viewBox', '0 0 '+CANVAS_W+' '+CANVAS_H);
+  svg.setAttribute('width', CANVAS_W);
+  svg.setAttribute('height', CANVAS_H);
+
+  CONNECTIONS.forEach(function(conn){
+    var from = NODE_BY_ID[conn.from], to = NODE_BY_ID[conn.to];
+    var fromH = from.kind==='trunk' ? TRUNK_H : nodeHeights[from.id].header;
+    var toH = to.kind==='trunk' ? TRUNK_H : nodeHeights[to.id].header;
+    var p1 = rectBorderPoint(from.cx, from.cy, from.w, fromH, to.cx, to.cy);
+    var p2 = rectBorderPoint(to.cx, to.cy, to.w, toH, from.cx, from.cy);
+
+    var g = document.createElementNS(NS,'g');
+    g.setAttribute('class', 'pipe pipe-'+conn.kind);
+    g.setAttribute('data-type', conn.kind);
+
+    var path = document.createElementNS(NS,'path');
+    path.setAttribute('d', smoothPath(p1.x,p1.y,p2.x,p2.y));
+    path.setAttribute('marker-end', conn.kind==='feedback' ? 'url(#mArrowOk)' : 'url(#mArrowMain)');
+    g.appendChild(path);
+    svg.appendChild(g);
+
+    if(conn.kind!=='feedback'){
+      var len = path.getTotalLength();
+      var count = conn.kind==='trunk-branch' ? 5 : (conn.kind==='sub' ? 3 : 4);
+      var particles = [];
+      for(var i=0;i<count;i++){
+        var c = document.createElementNS(NS,'circle');
+        c.setAttribute('class','particle');
+        c.setAttribute('r', 3);
+        g.appendChild(c);
+        particles.push({ t: i/count, speed: randRange(0.07,0.13)*SIM_SPEED, el:c });
+      }
+      conn._path = path; conn._len = len; conn._particles = particles;
+    }
+  });
+}
+
+function updateParticles(dt){
+  CONNECTIONS.forEach(function(conn){
+    if(!conn._particles) return;
+    conn._particles.forEach(function(p){
+      p.t += p.speed*dt;
+      if(p.t>1) p.t -= 1;
+      var pt = conn._path.getPointAtLength(p.t*conn._len);
+      p.el.setAttribute('cx', pt.x);
+      p.el.setAttribute('cy', pt.y);
+    });
+  });
+}
+
+/* ---------- counters (illustrative, not live data) ---------- */
+function initCounters(){
+  NODES.forEach(function(n){
+    (n.counters||[]).forEach(function(c){
+      var key = n.id+'.'+c.id;
+      var v;
+      if(c.type==='cumulative') v = c.seed;
+      else if(c.type==='fixed') v = c.value;
+      else v = c.mean;
+      counterState[key] = { value:v, cfg:c, nodeId:n.id, _easeFrom:null };
+    });
+  });
+}
+
+function updateCounters(dt){
+  var loopPhase = (simTime % LOOP_DUR) / LOOP_DUR;
+  var easeStart = 1 - EASE_WINDOW/LOOP_DUR;
+  var inEase = loopPhase >= easeStart;
+  Object.keys(counterState).forEach(function(key){
+    var st = counterState[key];
+    var c = st.cfg;
+    if(c.type==='fixed') return;
+    if(c.type==='gauge' || c.type==='meanrevert'){
+      var reversion = c.type==='meanrevert' ? 0.55 : 0.2;
+      var drift = (c.mean - st.value)*reversion;
+      var noise = (Math.random()-0.5)*2*(c.vol||1);
+      st.value += (drift+noise)*dt;
+      st.value = Math.max(c.min, Math.min(c.max, st.value));
+    } else if(c.type==='cumulative'){
+      if(inEase){
+        if(st._easeFrom===null) st._easeFrom = st.value;
+        var t = Math.min(1, (loopPhase-easeStart)/(1-easeStart));
+        st.value = st._easeFrom + (c.seed - st._easeFrom)*t;
+      } else {
+        st._easeFrom = null;
+        var r = randRange(c.rate[0], c.rate[1]);
+        st.value += r*dt;
+      }
+    }
+  });
+}
+
+function renderAllCounters(){
+  Object.keys(counterState).forEach(function(key){
+    var st = counterState[key];
+    var domKey = key.replace('.', '-');
+    var valEl = document.getElementById('cv-'+domKey);
+    if(valEl) valEl.textContent = fmtCounter(st.cfg, st.value);
+    var panelEl = document.getElementById('panelcv-'+domKey);
+    if(panelEl) panelEl.textContent = fmtCounter(st.cfg, st.value);
+  });
+}
+
+/* ---------- tooltip (hover) ---------- */
+function showTooltip(n, el){
+  currentTooltipNode = n;
+  document.getElementById('ttWhat').textContent = n.tooltip.what;
+  document.getElementById('ttWhy').textContent = n.tooltip.why;
+  var tip = document.getElementById('tooltip');
+  tip.style.display = 'block';
+  positionTooltip(el, tip);
+}
+function hideTooltip(){
+  document.getElementById('tooltip').style.display = 'none';
+  currentTooltipNode = null;
+}
+function positionTooltip(el, tip){
+  var r = el.getBoundingClientRect();
+  var tw = tip.offsetWidth, th = tip.offsetHeight;
+  var left = r.left + r.width/2 - tw/2;
+  var top = r.top - th - 14;
+  if(top < 8){ top = r.bottom + 14; }
+  left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+  top = Math.max(8, Math.min(top, window.innerHeight - th - 8));
+  tip.style.left = left+'px';
+  tip.style.top = top+'px';
+}
+
+/* ---------- click-to-pin detail panel ---------- */
+function tagFor(n){
+  if(n.kind==='trunk') return 'Trunk';
+  if(n.kind==='stub') return 'Coming next';
+  var idx = BRANCH_A_IDS.indexOf(n.id);
+  return 'Branch A · node '+(idx+1)+' of '+BRANCH_A_IDS.length;
+}
+
+function clearSelection(){
+  if(pinnedNode){
+    var el = document.getElementById('node-'+pinnedNode.id);
+    if(el) el.classList.remove('selected');
+  }
+}
+
+function openPanel(n){
+  clearSelection();
+  var el = document.getElementById('node-'+n.id);
+  if(el) el.classList.add('selected');
+  pinnedNode = n;
+
+  document.getElementById('dpTag').textContent = tagFor(n);
+  document.getElementById('dpTitle').textContent = n.title;
+
+  var whatSection = document.getElementById('dpWhatSection');
+  var whySection = document.getElementById('dpWhySection');
+  var countersSection = document.getElementById('dpCountersSection');
+  var minorSection = document.getElementById('dpMinorSection');
+  var stubSection = document.getElementById('dpStubSection');
+
+  if(n.kind==='stub'){
+    whatSection.style.display = 'none';
+    whySection.style.display = 'none';
+    countersSection.style.display = 'none';
+    minorSection.style.display = 'none';
+    stubSection.style.display = '';
+    document.getElementById('dpStubText').textContent = n.stubMessage;
+  } else {
+    stubSection.style.display = 'none';
+
+    whatSection.style.display = '';
+    document.getElementById('dpWhat').textContent = n.tooltip.what;
+
+    whySection.style.display = '';
+    document.getElementById('dpWhy').textContent = n.tooltip.why;
+
+    if(n.counters && n.counters.length){
+      countersSection.style.display = '';
+      var wrap = document.getElementById('dpCounters');
+      wrap.innerHTML = '';
+      n.counters.forEach(function(c){
+        var d = document.createElement('div');
+        d.className = 'dp-counter';
+        d.innerHTML = '<div class="dp-counter-label">'+escapeHtml(c.label)+'</div><div class="dp-counter-value" id="panelcv-'+n.id+'-'+c.id+'">-</div>';
+        wrap.appendChild(d);
+      });
+    } else {
+      countersSection.style.display = 'none';
+    }
+
+    if(n.minor){
+      minorSection.style.display = '';
+      document.getElementById('dpMinorList').innerHTML = n.minor.map(function(item){
+        return '<li><span class="dot"></span><span class="txt">'+escapeHtml(item)+'</span></li>';
+      }).join('');
+    } else {
+      minorSection.style.display = 'none';
+    }
+  }
+
+  document.getElementById('detailPanel').classList.add('open');
+  renderAllCounters();
+}
+
+function closePanel(){
+  clearSelection();
+  pinnedNode = null;
+  document.getElementById('detailPanel').classList.remove('open');
+}
+
+/* ---------- Overview / Full Detail toggle ---------- */
+function renderMinorContent(n, wrap){
+  var html = '<div class="minor-inner"><ul class="minor-steps">';
+  n.minor.forEach(function(item){
+    html += '<li><span class="dot"></span><span class="txt">'+escapeHtml(item)+'</span></li>';
+  });
+  html += '</ul></div>';
+  wrap.innerHTML = html;
+}
+
+function setMode(minor){
+  if(minor===minorMode) return;
+  minorMode = minor;
+  modeVersion++;
+  var myVersion = modeVersion;
+
+  var btnMajor = document.getElementById('btnMajor');
+  var btnMinor = document.getElementById('btnMinor');
+  btnMajor.classList.toggle('active', !minor);
+  btnMinor.classList.toggle('active', minor);
+  btnMajor.setAttribute('aria-pressed', String(!minor));
+  btnMinor.setAttribute('aria-pressed', String(minor));
+
+  var minorNodes = NODES.filter(function(n){ return !!n.minor; });
+  minorNodes.forEach(function(n, idx){
+    var wrap = document.getElementById('minorwrap-'+n.id);
+    if(!wrap) return;
+    var delay = idx*60;
+
+    if(minor){
+      renderMinorContent(n, wrap);
+      var targetH = wrap.scrollHeight;
+      wrap.style.maxHeight = '0px';
+      void wrap.offsetHeight;
+      setTimeout(function(){
+        if(modeVersion!==myVersion) return;
+        wrap.style.maxHeight = targetH+'px';
+        wrap.classList.add('open');
+      }, delay);
+    } else {
+      wrap.style.maxHeight = '0px';
+      wrap.classList.remove('open');
+      setTimeout(function(){
+        if(modeVersion!==myVersion) return;
+        wrap.innerHTML = '';
+      }, 500);
+    }
+  });
+}
+
+/* ---------- zoom / pan (our own, never the browser's) ---------- */
+function applyTransform(){
+  document.getElementById('canvasInner').style.transform = 'translate('+panX+'px,'+panY+'px) scale('+zoom+')';
+  document.getElementById('zoomPct').textContent = Math.round(zoom*100)+'%';
+}
+function setZoom(newZoom, anchorClientX, anchorClientY){
+  newZoom = Math.max(0.3, Math.min(2.5, newZoom));
+  var vp = document.getElementById('canvasViewport');
+  var vpRect = vp.getBoundingClientRect();
+  var localX = anchorClientX - vpRect.left;
+  var localY = anchorClientY - vpRect.top;
+  var canvasPtX = (localX - panX) / zoom;
+  var canvasPtY = (localY - panY) / zoom;
+  zoom = newZoom;
+  panX = localX - canvasPtX*zoom;
+  panY = localY - canvasPtY*zoom;
+  applyTransform();
+}
+function zoomBy(delta){
+  var vp = document.getElementById('canvasViewport');
+  var r = vp.getBoundingClientRect();
+  setZoom(zoom+delta, r.left+r.width/2, r.top+r.height/2);
+}
+function resetZoom(){
+  var vw = window.innerWidth;
+  var vh = window.innerHeight - TOPBAR_H;
+  var fitZoom = Math.min(1, Math.min((vw - 2*SIDE_PAD) / CANVAS_W, (vh - 2*SIDE_PAD) / CANVAS_H));
+  zoom = fitZoom;
+  panX = (vw - CANVAS_W * fitZoom) / 2;
+  panY = (vh - CANVAS_H * fitZoom) / 2 + TOPBAR_H;
+  applyTransform();
+}
+function initZoomPan(){
+  var vp = document.getElementById('canvasViewport');
+  resetZoom();
+
+  var activePointers = new Map();
+  var pinchPrevDist = 0;
+
+  function pointersArr(){ return Array.from(activePointers.values()); }
+  function pointerDist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+  function pointerMid(a,b){ return { x:(a.x+b.x)/2, y:(a.y+b.y)/2 }; }
+
+  vp.addEventListener('pointerdown', function(e){
+    if(e.target.closest('.node')) return;
+    try { vp.setPointerCapture(e.pointerId); } catch(err){ /* not every synthetic/edge-case pointerId is capturable */ }
+    activePointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+
+    if(activePointers.size === 1){
+      isDragging = true; dragMoved = false;
+      dragStartClientX = e.clientX; dragStartClientY = e.clientY;
+      dragStartPanX = panX; dragStartPanY = panY;
+      vp.classList.add('dragging');
+    } else if(activePointers.size === 2){
+      isDragging = false;
+      vp.classList.remove('dragging');
+      var pts = pointersArr();
+      pinchPrevDist = pointerDist(pts[0], pts[1]);
+    }
+  });
+  window.addEventListener('pointermove', function(e){
+    if(!activePointers.has(e.pointerId)) return;
+    activePointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+
+    if(activePointers.size >= 2){
+      var pts = pointersArr();
+      var dist = pointerDist(pts[0], pts[1]);
+      if(pinchPrevDist > 0){
+        var mid = pointerMid(pts[0], pts[1]);
+        setZoom(zoom * (dist/pinchPrevDist), mid.x, mid.y);
+      }
+      pinchPrevDist = dist;
+      return;
+    }
+
+    if(!isDragging) return;
+    var dx = e.clientX-dragStartClientX, dy = e.clientY-dragStartClientY;
+    if(Math.abs(dx)>4 || Math.abs(dy)>4) dragMoved = true;
+    panX = dragStartPanX+dx; panY = dragStartPanY+dy;
+    applyTransform();
+  });
+  function releasePointer(e){
+    if(!activePointers.has(e.pointerId)) return;
+    activePointers.delete(e.pointerId);
+    if(activePointers.size < 2) pinchPrevDist = 0;
+    if(activePointers.size === 0 && isDragging){
+      isDragging = false;
+      vp.classList.remove('dragging');
+      if(!dragMoved){
+        closePanel();
+      }
+    }
+  }
+  window.addEventListener('pointerup', releasePointer);
+  window.addEventListener('pointercancel', releasePointer);
+
+  vp.addEventListener('wheel', function(e){
+    if(!e.ctrlKey) return;
+    e.preventDefault();
+    var factor = Math.exp(-e.deltaY*0.0015);
+    setZoom(zoom*factor, e.clientX, e.clientY);
+  }, { passive:false });
+
+  document.getElementById('zoomIn').addEventListener('click', function(){ zoomBy(0.1); });
+  document.getElementById('zoomOut').addEventListener('click', function(){ zoomBy(-0.1); });
+  document.getElementById('zoomReset').addEventListener('click', resetZoom);
+
+  document.addEventListener('keydown', function(e){
+    if(e.target && (e.target.tagName==='INPUT' || e.target.tagName==='TEXTAREA')) return;
+    if(e.key==='Escape'){ closePanel(); return; }
+    if(e.key==='+' || e.key==='='){ zoomBy(0.1); e.preventDefault(); }
+    else if(e.key==='-'){ zoomBy(-0.1); e.preventDefault(); }
+    else if(e.key==='0'){ resetZoom(); e.preventDefault(); }
+  });
+}
+
+/* ---------- UI bindings ---------- */
+function bindUI(){
+  document.getElementById('btnMajor').addEventListener('click', function(){ setMode(false); });
+  document.getElementById('btnMinor').addEventListener('click', function(){ setMode(true); });
+  document.getElementById('dpClose').addEventListener('click', function(e){ e.stopPropagation(); closePanel(); });
+  document.getElementById('detailPanel').addEventListener('click', function(e){ e.stopPropagation(); });
+
+  var wfMenuBtn = document.getElementById('wfMenuBtn');
+  if(wfMenuBtn){
+    wfMenuBtn.addEventListener('click', function(){
+      if(window.parent && window.parent !== window){
+        window.parent.postMessage({ source: 'wflib', action: 'toggleSidebar' }, location.origin);
+      }
+    });
+  }
+}
+
+/* ---------- main loop ---------- */
+function loop(ts){
+  if(lastFrameTs===null) lastFrameTs = ts;
+  var dt = Math.min((ts-lastFrameTs)/1000, 0.05);
+  lastFrameTs = ts;
+  simTime += dt;
+  updateCounters(dt);
+  updateParticles(dt);
+  frameCount++;
+  if(frameCount % 6 === 0) renderAllCounters();
+  requestAnimationFrame(loop);
+}
+
+/* ---------- init ---------- */
+function init(){
+  NODES.forEach(function(n){ NODE_BY_ID[n.id] = n; });
+  layoutNodes();
+
+  var inner = document.getElementById('canvasInner');
+  inner.style.width = CANVAS_W+'px';
+  inner.style.height = CANVAS_H+'px';
+
+  buildNodes();
+  finalizeLayout();
+
+  buildSvgDefs();
+  buildPipesSvg();
+
+  initCounters();
+  renderAllCounters();
+  bindUI();
+  initZoomPan();
+
+  requestAnimationFrame(loop);
+}
+
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+})();
+</script>
+</body>
+</html>

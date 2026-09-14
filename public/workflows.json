@@ -9,6 +9,15 @@
     "tags": []
   },
   {
+    "id": "leadgenpro",
+    "title": "Leadgenpro",
+    "subtitle": "Multi Channel Ai native Lead generation and outbound automation platform",
+    "client": "Self Build and Owned Completely",
+    "file": "workflows/leadgenpro.html",
+    "accent": "#7C3AED",
+    "tags": ["Live system", "Multi-channel", "Solo build"]
+  },
+  {
     "id": "account-enrichment",
     "title": "Account Enrichment Engine",
     "subtitle": "Salesforce enrichment pipeline",
