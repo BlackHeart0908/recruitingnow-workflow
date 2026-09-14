@@ -1,0 +1,11 @@
+{
+  "name": "recruitingnow-workflow",
+  "private": true,
+  "scripts": {
+    "test": "node tests/grep_checks.js && playwright test tests/library_acceptance.spec.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.0",
+    "serve": "^14.2.4"
+  }
+}

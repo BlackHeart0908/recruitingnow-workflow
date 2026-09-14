@@ -1,11 +1,20 @@
 [
   {
-    "id": "recruitingnow",
-    "title": "RecruitingNOW",
+    "id": "home",
+    "title": "Welcome",
+    "subtitle": "Start here",
+    "client": "",
+    "file": "workflows/home.html",
+    "accent": "",
+    "tags": []
+  },
+  {
+    "id": "account-enrichment",
+    "title": "Account Enrichment Engine",
     "subtitle": "Salesforce enrichment pipeline",
-    "client": "RecruitingNOW · Germany",
-    "file": "workflows/recruitingnow.html",
+    "client": "",
+    "file": "workflows/account-enrichment.html",
     "accent": "#EF7F1A",
-    "tags": ["Proposed Architecture", "Salesforce"]
+    "tags": ["Proposed architecture", "Salesforce"]
   }
 ]

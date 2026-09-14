@@ -18,6 +18,7 @@
   --border:rgba(255,255,255,.08);
   --sidebar-w:280px;
   --topbar-h:48px;
+  --menu-pill-size:34px;
   --ease:cubic-bezier(.4,0,.2,1);
 }
 *{box-sizing:border-box;}
@@ -45,13 +46,36 @@ button{font-family:inherit;cursor:pointer;}
 .menu-btn:hover{background:var(--bg-600);color:var(--ink);}
 .menu-btn svg{width:18px;height:18px;}
 .brand{display:flex;flex-direction:column;min-width:0;}
-.brand-title{font-size:14px;font-weight:700;letter-spacing:-.01em;line-height:1.2;}
+.brand-title{font-size:14px;font-weight:700;letter-spacing:-.01em;line-height:1.2;overflow:hidden;text-overflow:ellipsis;}
 .brand-sub{font-size:10.5px;color:var(--ink-dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .topbar-right{display:flex;align-items:center;gap:10px;}
 .count-badge{
   font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
   color:var(--accent);background:var(--accent-dim);
   padding:5px 10px;border-radius:20px;white-space:nowrap;
+}
+
+/* ── Floating menu pill (desktop, sidebar collapsed) ── */
+.menu-pill{
+  display:none;
+  appearance:none;border:none;background:var(--bg-700);
+  color:var(--ink-mute);
+  position:fixed;top:12px;left:12px;z-index:30;
+  width:var(--menu-pill-size);height:var(--menu-pill-size);
+  border-radius:8px;
+  align-items:center;justify-content:center;
+  box-shadow:0 4px 16px rgba(0,0,0,.35);
+  transition:background .2s,color .2s;
+}
+.menu-pill:hover{background:var(--bg-600);color:var(--ink);}
+.menu-pill svg{width:18px;height:18px;}
+.menu-pill.visible{display:flex;}
+
+@media(min-width:769px){
+  .topbar{display:none;}
+}
+@media(max-width:768px){
+  .menu-pill{display:none !important;}
 }
 
 /* ── Body layout ── */
@@ -72,19 +96,20 @@ button{font-family:inherit;cursor:pointer;}
   opacity:0;
   pointer-events:none;
 }
+.sidebar.collapsed .sidebar-head,
+.sidebar.collapsed .workflow-list,
+.sidebar.collapsed .sidebar-foot{min-width:0;padding-left:0;padding-right:0;overflow:hidden;}
 .sidebar-head{
-  padding:18px 16px 12px;
+  padding:16px 16px 14px;
   border-bottom:1px solid var(--border);
   white-space:nowrap;
   min-width:var(--sidebar-w);
 }
-.sidebar-label{
-  font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-  color:var(--ink-dim);
-}
-.sidebar-count{
-  margin-top:4px;font-size:12px;color:var(--ink-mute);
-}
+.sidebar-head-row{display:flex;align-items:center;gap:10px;}
+.sidebar-head .brand{flex:1;min-width:0;}
+.sidebar-head .brand-title{font-size:15px;}
+.sidebar-head .brand-sub{margin-top:6px;font-size:11px;}
+.sidebar-head .count-badge{margin-top:8px;display:inline-block;}
 
 .workflow-list{
   flex:1;overflow-y:auto;overflow-x:hidden;
@@ -120,6 +145,12 @@ button{font-family:inherit;cursor:pointer;}
   font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
   padding:3px 7px;border-radius:4px;
   background:rgba(255,255,255,.05);color:var(--ink-mute);
+}
+.wf-start-here{
+  display:inline-block;
+  font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  padding:3px 8px;border-radius:20px;margin-bottom:6px;
+  background:var(--accent-dim);color:var(--accent);
 }
 
 .sidebar-foot{
@@ -198,13 +229,25 @@ button{font-family:inherit;cursor:pointer;}
     </div>
   </header>
 
+  <button class="menu-pill" id="menuPill" aria-label="Expand sidebar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+
   <div class="body">
     <div class="backdrop" id="backdrop"></div>
 
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-head">
-        <div class="sidebar-label">Canvases</div>
-        <div class="sidebar-count" id="sidebarCount"></div>
+        <div class="sidebar-head-row">
+          <button class="menu-btn" id="sidebarMenuBtn" aria-label="Toggle sidebar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <div class="brand">
+            <div class="brand-title">Workflow Library</div>
+          </div>
+        </div>
+        <div class="brand-sub" id="activeLabelDesktop">Select a workflow to begin</div>
+        <span class="count-badge" id="countBadgeDesktop">0 workflows</span>
       </div>
       <div class="workflow-list" id="workflowList"></div>
       <div class="sidebar-foot">Drop new HTML files into <strong>workflows/</strong> and register them in <strong>workflows.json</strong>.</div>
@@ -243,7 +286,9 @@ button{font-family:inherit;cursor:pointer;}
   var empty = document.getElementById('empty');
   var activeLabel = document.getElementById('activeLabel');
   var countBadge = document.getElementById('countBadge');
-  var sidebarCount = document.getElementById('sidebarCount');
+  var activeLabelDesktop = document.getElementById('activeLabelDesktop');
+  var countBadgeDesktop = document.getElementById('countBadgeDesktop');
+  var menuPill = document.getElementById('menuPill');
 
   function isMobile(){ return MOBILE.matches; }
 
@@ -252,6 +297,7 @@ button{font-family:inherit;cursor:pointer;}
     sidebar.classList.toggle('collapsed', collapsed);
     document.getElementById('menuBtn').setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     localStorage.setItem(STORAGE_COLLAPSED, collapsed ? '1' : '0');
+    menuPill.classList.toggle('visible', collapsed);
   }
 
   function closeMobileSidebar(){
@@ -271,18 +317,20 @@ button{font-family:inherit;cursor:pointer;}
   function renderCards(){
     workflowList.innerHTML = '';
     workflows.forEach(function(wf){
+      var isHome = wf.id === 'home';
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'wf-card' + (wf.id === activeId ? ' active' : '');
       btn.dataset.id = wf.id;
       btn.innerHTML =
         '<div class="wf-card-inner">' +
-          '<div class="wf-accent" style="background:' + wf.accent + '"></div>' +
+          (isHome ? '' : '<div class="wf-accent" style="background:' + wf.accent + '"></div>') +
           '<div class="wf-body">' +
             '<div class="wf-text">' +
+              (isHome ? '<span class="wf-start-here">START HERE</span>' : '') +
               '<div class="wf-title">' + esc(wf.title) + '</div>' +
               '<div class="wf-sub">' + esc(wf.subtitle) + '</div>' +
-              '<div class="wf-client">' + esc(wf.client) + '</div>' +
+              (wf.client ? '<div class="wf-client">' + esc(wf.client) + '</div>' : '') +
               (wf.tags && wf.tags.length ?
                 '<div class="wf-tags">' + wf.tags.map(function(t){
                   return '<span class="wf-tag">' + esc(t) + '</span>';
@@ -294,8 +342,9 @@ button{font-family:inherit;cursor:pointer;}
       workflowList.appendChild(btn);
     });
 
-    countBadge.textContent = workflows.length + ' workflow' + (workflows.length === 1 ? '' : 's');
-    sidebarCount.textContent = workflows.length + ' available';
+    var countText = workflows.length + ' workflow' + (workflows.length === 1 ? '' : 's');
+    countBadge.textContent = countText;
+    countBadgeDesktop.textContent = countText;
   }
 
   function esc(s){
@@ -309,11 +358,13 @@ button{font-family:inherit;cursor:pointer;}
     if(!wf) return;
 
     activeId = id;
-    localStorage.setItem(STORAGE_LAST, id);
+    if(id !== 'home') localStorage.setItem(STORAGE_LAST, id);
     if(location.hash !== '#' + id) history.replaceState(null, '', '#' + id);
 
     renderCards();
-    activeLabel.textContent = wf.title + ' · ' + wf.subtitle;
+    var label = wf.title + ' · ' + wf.subtitle;
+    activeLabel.textContent = label;
+    activeLabelDesktop.textContent = label;
     empty.classList.remove('show');
     loading.classList.remove('hidden');
     loadingText.textContent = 'Loading ' + wf.title + '…';
@@ -334,6 +385,10 @@ button{font-family:inherit;cursor:pointer;}
       return;
     }
     var last = localStorage.getItem(STORAGE_LAST);
+    if(!hash && !last && workflows.some(function(w){ return w.id === 'home'; })){
+      selectWorkflow('home');
+      return;
+    }
     if(last && workflows.some(function(w){ return w.id === last; })){
       selectWorkflow(last);
       return;
@@ -348,6 +403,8 @@ button{font-family:inherit;cursor:pointer;}
   }
 
   document.getElementById('menuBtn').addEventListener('click', toggleSidebar);
+  document.getElementById('sidebarMenuBtn').addEventListener('click', toggleSidebar);
+  menuPill.addEventListener('click', toggleSidebar);
   backdrop.addEventListener('click', closeMobileSidebar);
 
   window.addEventListener('hashchange', function(){

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workflow Library</title>
+<style>
+:root{
+  --bg-900:#121618;
+  --ink:#FFFFFF;
+  --ink-mute:#9BA6AB;
+  --ink-dim:#6B7579;
+  --accent:#7C6BF0;
+}
+*{box-sizing:border-box;}
+html,body{height:100%;margin:0;padding:0;background:var(--bg-900);color:var(--ink);font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+.wrap{
+  min-height:100%;
+  display:flex;flex-direction:column;justify-content:center;
+  max-width:640px;margin:0 auto;
+  padding:12vh 24px;
+}
+h1{
+  font-size:32px;font-weight:700;letter-spacing:-.02em;
+  margin:0 0 16px;color:var(--ink);
+}
+p.lead{
+  font-size:17px;color:var(--ink);
+  margin:0 0 16px;line-height:1.5;
+}
+p.body-copy{
+  font-size:15px;color:var(--ink-mute);
+  margin:0;line-height:1.6;
+}
+.helper{
+  margin-top:40px;
+  font-size:13px;color:var(--ink-dim);
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>[[HOMEPAGE_TITLE]]</h1>
+  <p class="lead">[[HOMEPAGE_ONELINER]]</p>
+  <p class="body-copy">[[HOMEPAGE_LIBRARY_DESC]]</p>
+  <div class="helper">Pick a workflow from the left to see it run.</div>
+</div>
+</body>
+</html>
