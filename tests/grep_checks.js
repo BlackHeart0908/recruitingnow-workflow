@@ -106,7 +106,11 @@ checkNoStrings(
   'public/workflows.json',
   'tests/grep_checks.js',
   'tests/library_acceptance.spec.js',
-  'package.json'
+  'package.json',
+  'public/framework/wf-framework-v2.js',
+  'FRAMEWORK.md',
+  'tests/framework_unit.js',
+  'public/workflows/leadgenpro.html'
 ].forEach(checkNoEmDash);
 
 /* Check A: menu pill fully removed from the shell */
@@ -156,8 +160,8 @@ checkNoStrings(
 [
   'wf-menu-btn',
   'postMessage',
-  'TRUNK_CX',
-  'polar\\(',
+  'WF\\.mount\\(',
+  'wf-framework-v2\\.js',
   'Leadgenpro',
   '--accent:#7C3AED'
 ].forEach(function (pattern) {
@@ -222,38 +226,66 @@ checkMinHits('public/workflows/leadgenpro.html', 'Overview vs Full Detail split 
   }
 })();
 
-/* Check M: framework block present */
-checkMinHits('public/workflows/leadgenpro.html', 'MEASUREMENT FRAMEWORK v1', 1, 'Check M');
+/* Check Q: the shared framework file exists, is v2, carries the DOM runtime, and is client-name free
+   (it is publicly served from public/framework/) */
+(function checkFrameworkFile() {
+  const rel = 'public/framework/wf-framework-v2.js';
+  if (!fs.existsSync(path.join(ROOT, rel))) {
+    failures.push('Check Q: ' + rel + ' is missing');
+    return;
+  }
+  const content = readFile(rel);
+  if (content.indexOf("VERSION = '2.0.0'") === -1) {
+    failures.push('Check Q: ' + rel + " does not declare VERSION = '2.0.0'");
+  }
+  if (content.indexOf('function mount(') === -1) {
+    failures.push('Check Q: ' + rel + ' does not define the DOM runtime function mount(');
+  }
+  ['RecruitingNOW', 'Andreas', 'Bavaria', 'Germany'].forEach(function (s) {
+    if (content.indexOf(s) !== -1) {
+      failures.push('Check Q: found "' + s + '" in ' + rel);
+    }
+  });
+})();
 
-/* Check N: constants derived, not hardcoded */
-[
-  'GAP_TIGHT',
-  'GAP_BREATH',
-  'GAP_ISLAND',
-  'GAP_SECTOR',
-  'TRUNK_CLEAR_R',
-  'BRANCH_START_R',
-  'BRANCH_NODE_STEP',
-  'SUB_FORK_ANGLE'
-].forEach(function (name) {
-  checkMinHits('public/workflows/leadgenpro.html', name, 1, 'Check N');
-});
-
-/* Check O: BRANCH_START_R is derived, not a literal */
-checkMinHits(
-  'public/workflows/leadgenpro.html',
-  'BRANCH_START_R\\s*=\\s*TRUNK_CLEAR_R\\s*\\+\\s*NODE_W\\s*/\\s*2',
-  1,
-  'Check O'
-);
-
-/* Check P: aggressive clearance pass removed, warn-only invariant check present */
+/* Check R: Measurement Framework v1 is gone from LeadGenPro and Framework v2 drives it */
 checkNoPatterns(
   'public/workflows/leadgenpro.html',
-  ['enforceClearance', 'pushBranchOutward'],
-  'Check P'
+  [
+    'polar\\(',
+    'SUB_FORK_ANGLE',
+    'BRANCH_NODE_STEP',
+    'radialStep',
+    'angleOffset',
+    'checkLayoutInvariants',
+    'MEASUREMENT FRAMEWORK v1',
+    'var GAP_'
+  ],
+  'Check R'
 );
-checkMinHits('public/workflows/leadgenpro.html', 'checkLayoutInvariants', 1, 'Check P');
+[
+  'WF_SPEC',
+  "pattern: 'brain'",
+  'wfResetLayout'
+].forEach(function (pattern) {
+  const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  checkMinHits('public/workflows/leadgenpro.html', escaped, 1, 'Check R');
+});
+
+/* Check S: the spec copy is client-name free */
+(function checkFrameworkDoc() {
+  const rel = 'FRAMEWORK.md';
+  if (!fs.existsSync(path.join(ROOT, rel))) {
+    failures.push('Check S: ' + rel + ' is missing');
+    return;
+  }
+  const content = readFile(rel);
+  ['RecruitingNOW', 'Andreas', 'Bavaria', 'Germany'].forEach(function (s) {
+    if (content.indexOf(s) !== -1) {
+      failures.push('Check S: found "' + s + '" in ' + rel);
+    }
+  });
+})();
 
 if (failures.length) {
   console.error('grep_checks.js: ' + failures.length + ' failure(s):');

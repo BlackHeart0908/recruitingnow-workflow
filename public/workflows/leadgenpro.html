@@ -5,50 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Leadgenpro</title>
 <!--
-  ─── MEASUREMENT FRAMEWORK v1 (Workflow Library, radial workflows) ───
-  Applies to LeadGenPro today and every future radial workflow (Branches C, D of
-  LeadGenPro, and any future top-level radial canvas). Every spacing constant
-  below is either a BASE TIER (four values, edge-to-edge canvas units) or
-  DERIVED FROM A TIER. There are no magic numbers.
-
-  BASE TIERS (edge-to-edge, canvas units):
-    GAP_TIGHT   = 40    adjacent nodes inside one straight chain
-    GAP_BREATH  = 80    node to trunk, node to hub, node at a fork point
-    GAP_ISLAND  = 140   between two sub-branches of the same parent
-    GAP_SECTOR  = 240   between two top-level branches of the trunk
-
-  FIXED DIMENSIONS:
-    TRUNK_W = 240, TRUNK_H = 90
-    NODE_W  = 200 (nominal; measure-then-place inflates rows as needed)
-
-  DERIVED CONSTANTS (compute; never set manually):
-    TRUNK_CLEAR_R    = max(TRUNK_W, TRUNK_H) / 2 + GAP_BREATH = 120 + 80 = 200
-    BRANCH_START_R   = TRUNK_CLEAR_R + NODE_W / 2 = 300
-    BRANCH_NODE_STEP = NODE_W + GAP_TIGHT = 240
-    SUB_FORK_ANGLE   = 35 degrees (validated: at CRM radius = BRANCH_START_R + 2*BRANCH_NODE_STEP = 780,
-                                  distance between two sub-first-nodes = 2 * (780 + BRANCH_NODE_STEP) * sin(35deg)
-                                  = 2 * 1020 * 0.574 = ~1170. Minus 2 * NODE_W/2 = 200. Gap = 970. Well over GAP_ISLAND = 140.)
-    CANVAS_W = CANVAS_H = 3000 (fits max branch extent = BRANCH_START_R + 4 * BRANCH_NODE_STEP
-                               + NODE_W/2 + GAP_BREATH = 300 + 960 + 100 + 80 = 1440, doubled + margin)
-
-  BRANCH AXIS ANGLES (fixed for the library, do NOT change per workflow):
-    0 degrees (right), 90 (down), 180 (left), 270 (up)
-
-  INVARIANTS (the clearance pass in finalizeLayout() checks these; on failure it warns,
-  it does NOT auto-bump anything, because a correctly-configured framework CANNOT fail):
-    I1: No node bounding box intersects the trunk-clear circle (radius TRUNK_CLEAR_R around trunk center).
-    I2: No two node bounding boxes come within GAP_TIGHT of each other.
-    I3: No two same-parent sub-branches fork at less than 20 degrees.
-
-  HARMONY RULE FOR SUB-WORKFLOWS:
-    Every branch shares BRANCH_START_R and BRANCH_NODE_STEP. This makes the trunk-adjacent
-    zone read uniform even when branches differ in length. Longer branches extend further
-    out; this is natural asymmetry, not a defect. Branches never encroach on each other
-    because the 90-degree sector angle gives more than GAP_SECTOR at every radius.
-
-  IF you need to change a tier value: change ONLY the four base tiers, never the derived
-  constants directly. The whole layout re-scales harmoniously.
-  ────────────────────────────────────────────────────────────────
+  Layout: Workflow Library Framework v2 (public/framework/wf-framework-v2.js, spec FRAMEWORK.md).
+  This file only declares WF_SPEC (structure) and NODES (content). No spacing numbers live here.
 -->
 <!--
   Overview vs Full Detail split rule (for the future PIN gate, not yet enforced):
@@ -60,7 +18,7 @@
   Standing pattern for LeadGenPro branch expansions (Prompts C, D, E):
     Each new branch is authored inside THIS file, not a new file.
     The stub node for that branch is REPLACED IN PLACE with the full branch's node chain.
-    Branch axes are fixed at 0 / 90 / 180 / 270 degrees; do not add more branches without a fresh design pass.
+    Each branch expansion edits WF_SPEC (structure) and NODES (content) only; the framework places everything.
     Every branch node inherits the same copy discipline: on point, no fluff, no AI hedges, no em dashes.
     Every branch that ships marks its stub's tag removed and its opacity restored to 1.
 -->
@@ -127,7 +85,7 @@ body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;colo
 .counter-label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-mute);}
 .counter-value{font-size:15px;font-weight:700;color:var(--accent-lt);font-variant-numeric:tabular-nums;}
 
-.node.trunk{width:240px;height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,0) 45%), var(--accent);border:2px solid var(--accent-lt);box-shadow:inset 0 0 40px var(--accent-glow), 0 12px 30px rgba(0,0,0,.4);z-index:5;}
+.node.trunk{min-height:96px;padding:16px 18px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,0) 45%), var(--accent);border:2px solid var(--accent-lt);box-shadow:inset 0 0 40px var(--accent-glow), 0 12px 30px rgba(0,0,0,.4);z-index:5;}
 .node.trunk .node-header{padding:0;display:flex;flex-direction:column;align-items:center;}
 .node.trunk .node-title{font-size:22px;font-weight:700;color:var(--ink);min-height:0;}
 .node.trunk .node-subtitle{font-size:11px;color:rgba(255,255,255,.82);margin-top:4px;}
@@ -184,6 +142,11 @@ body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;colo
 .dp-minor-list .dot{width:5px;height:5px;margin-top:6px;border-radius:50%;background:var(--accent-dim);flex:none;}
 
 .footer{position:fixed;right:16px;bottom:10px;font-size:11px;color:var(--ink-dim);z-index:45;pointer-events:none;}
+
+[hidden]{display:none!important;}
+.wf-reset-btn{appearance:none;border:1px solid var(--accent-dim);background:var(--bg-700);color:var(--ink-mute);font-family:inherit;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;height:26px;padding:0 10px;border-radius:7px;cursor:pointer;}
+.wf-reset-btn:hover{color:var(--ink);background:var(--bg-600);}
+.node.wf-dragging{cursor:grabbing;z-index:20;}
 </style>
 </head>
 <body>
@@ -206,6 +169,7 @@ body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;colo
     </div>
   </div>
   <div class="topbar-right">
+    <button id="wfResetLayout" class="wf-reset-btn" type="button" hidden title="Put every card back where the framework placed it">Reset layout</button>
     <div class="zoomControls">
       <button id="zoomOut" class="zbtn" type="button" title="Zoom out (-)">&minus;</button>
       <span id="zoomPct" class="zoomPct">100%</span>
@@ -256,61 +220,22 @@ body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;colo
 
 <div class="footer">Illustrative scale, not live data.</div>
 
+<script src="../framework/wf-framework-v2.js?v=2.0.0"></script>
 <script>
 (function(){
 'use strict';
 
-var NS = 'http://www.w3.org/2000/svg';
 var SIM_SPEED = 1.4;
 var LOOP_DUR = 90 / SIM_SPEED;
 var EASE_WINDOW = 2;
 
-// ─── Measurement Framework v1 (see comment block at top of file) ───
-
-// Base tiers (edge-to-edge, canvas units). Change ONLY these to re-scale the layout.
-var GAP_TIGHT   = 40;
-var GAP_BREATH  = 80;
-var GAP_ISLAND  = 140;
-var GAP_SECTOR  = 240;
-
-// Fixed dimensions.
-var TRUNK_W = 240;
-var TRUNK_H = 90;
-var NODE_W  = 200;
-
-// Derived. Do NOT edit these directly.
-var TRUNK_CLEAR_R    = Math.max(TRUNK_W, TRUNK_H) / 2 + GAP_BREATH;    // 200
-var BRANCH_START_R   = TRUNK_CLEAR_R + NODE_W / 2;                     // 300
-var BRANCH_NODE_STEP = NODE_W + GAP_TIGHT;                             // 240
-var SUB_FORK_ANGLE   = 35;                                             // degrees, validated per top comment block
-
-// Canvas budget: max branch extent + margin, doubled.
-var _MAX_BRANCH_EXTENT = BRANCH_START_R + 4 * BRANCH_NODE_STEP + NODE_W / 2 + GAP_BREATH;
-var CANVAS_W = 2 * _MAX_BRANCH_EXTENT;                                 // 2880, rounded to 3000 below
-var CANVAS_H = 2 * _MAX_BRANCH_EXTENT;
-
-// Round to a stable canvas size so tests are deterministic.
-CANVAS_W = 3000;
-CANVAS_H = 3000;
-
-// Trunk center = canvas center.
-var TRUNK_CX = CANVAS_W / 2;    // 1500
-var TRUNK_CY = CANVAS_H / 2;    // 1500
-
-// Stub node radial distance (kept close-in so stubs read as "not yet expanded", not distant).
-var STUB_R = BRANCH_START_R + BRANCH_NODE_STEP;                        // 540
+// Canvas size is owned by the framework; these are filled in from rt.canvas at init.
+var CANVAS_W = 0, CANVAS_H = 0;
 
 var SIDE_PAD = 24;
 var TOPBAR_H = 44;
 
-var BRANCH_AXIS = { A: 0, B: 90, C: 180, D: 270 };
-
-function polar(cx, cy, r, deg){
-  var rad = deg * Math.PI / 180;
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-}
-
-/* ---------- node + connection data ---------- */
+/* ---------- node content ---------- */
 var NODES = [
   {
     id:'trunk', kind:'trunk', title:'Leadgenpro', subtitle:'Multi Channel Platform',
@@ -325,7 +250,7 @@ var NODES = [
   },
 
   {
-    id:'prospector', kind:'node', branchId:'A', radialStep:1, angleOffset:0,
+    id:'prospector', kind:'node', branchId:'A',
     title:'Prospector', subtitle:'Serper + Google Places lead finder',
     counters:[
       { id:'found', label:'Leads found today', type:'gauge', mean:100, min:60, max:140, vol:9, fmt:'int' },
@@ -344,7 +269,7 @@ var NODES = [
     }
   },
   {
-    id:'database', kind:'node', branchId:'A', radialStep:2, angleOffset:0,
+    id:'database', kind:'node', branchId:'A',
     title:'Lead Database', subtitle:'Per-tenant SQLite, master dedup, suppressed ledger',
     counters:[
       { id:'total', label:'Total leads', type:'fixed', value:8247, fmt:'int-comma' },
@@ -363,7 +288,7 @@ var NODES = [
     }
   },
   {
-    id:'crm', kind:'node', branchId:'A', radialStep:3, angleOffset:0,
+    id:'crm', kind:'node', branchId:'A',
     title:'CRM', subtitle:'Pipeline, follow-ups, filters, drawer',
     counters:[
       { id:'pipeline', label:'Active pipeline', type:'gauge', mean:220, min:180, max:260, vol:12, fmt:'int' },
@@ -381,7 +306,7 @@ var NODES = [
     }
   },
   {
-    id:'whatsapp', kind:'node', branchId:'A', radialStep:4, angleOffset:-SUB_FORK_ANGLE,
+    id:'whatsapp', kind:'node', branchId:'A',
     title:'WhatsApp Web', subtitle:'Extension-driven, batch and break, inbound watcher',
     counters:[
       { id:'sent', label:'Sent today', type:'cumulative', seed:0, rate:[0.40,0.75], fmt:'int' },
@@ -400,7 +325,7 @@ var NODES = [
     }
   },
   {
-    id:'coldcall', kind:'node', branchId:'A', radialStep:4, angleOffset:SUB_FORK_ANGLE, badge:'human',
+    id:'coldcall', kind:'node', branchId:'A', badge:'human',
     title:'Cold Call', subtitle:'Human dial, follow-up log',
     counters:[
       { id:'calls', label:'Calls today', type:'cumulative', seed:0, rate:[0.20,0.40], fmt:'int' },
@@ -418,7 +343,7 @@ var NODES = [
     }
   },
   {
-    id:'analyzer', kind:'node', branchId:'A', radialStep:5, angleOffset:SUB_FORK_ANGLE,
+    id:'analyzer', kind:'node', branchId:'A',
     title:'Call Analyzer', subtitle:'LLM tags each follow-up, 16 mistake categories',
     counters:[
       { id:'tagged', label:'Follow-ups tagged', type:'cumulative', seed:0, rate:[0.078,0.14], fmt:'int' },
@@ -436,7 +361,7 @@ var NODES = [
     }
   },
   {
-    id:'coach', kind:'node', branchId:'A', radialStep:6, angleOffset:SUB_FORK_ANGLE,
+    id:'coach', kind:'node', branchId:'A',
     title:'AI Coach', subtitle:'Weekly digest, fail split, skill vs lead diagnosis',
     counters:[
       { id:'digests', label:'Weekly digests sent', type:'fixed', value:34, fmt:'int' },
@@ -472,21 +397,32 @@ var NODES = [
   }
 ];
 
-var BRANCH_A_IDS = ['prospector','database','crm','whatsapp','coldcall','analyzer','coach'];
+var WF_SPEC = {
+  pattern: 'brain',
+  hub: 'trunk',
+  branches: [
+    { id: 'A', dir: 'right', chain: ['prospector', 'database', 'crm'],
+      forks: [{ at: 'crm', lanes: [
+        { side: -1, chain: ['whatsapp'] },
+        { side:  1, chain: ['coldcall', 'analyzer', 'coach'] }
+      ] }] },
+    { id: 'B', dir: 'down',  chain: ['stubB'] },
+    { id: 'C', dir: 'left',  chain: ['stubC'] },
+    { id: 'D', dir: 'up',    chain: ['stubD'] }
+  ],
+  loops: [{ from: 'coach', to: 'crm' }]
+};
+var rt = null;
 
-var CONNECTIONS = [
-  { id:'tb-a', from:'trunk', to:'prospector', kind:'trunk-branch' },
-  { id:'tb-b', from:'trunk', to:'stubB', kind:'trunk-branch' },
-  { id:'tb-c', from:'trunk', to:'stubC', kind:'trunk-branch' },
-  { id:'tb-d', from:'trunk', to:'stubD', kind:'trunk-branch' },
-  { id:'m1', from:'prospector', to:'database', kind:'main' },
-  { id:'m2', from:'database', to:'crm', kind:'main' },
-  { id:'s1', from:'crm', to:'whatsapp', kind:'sub' },
-  { id:'s2', from:'crm', to:'coldcall', kind:'sub' },
-  { id:'l1', from:'coldcall', to:'analyzer', kind:'linear' },
-  { id:'l2', from:'analyzer', to:'coach', kind:'linear' },
-  { id:'fb1', from:'coach', to:'crm', kind:'feedback' }
-];
+// Read off WF_SPEC so the detail panel's "node N of M" tag can never drift from the structure.
+var branchNodeIds = (function(){
+  var br = WF_SPEC.branches.filter(function(b){ return b.id === 'A'; })[0];
+  var ids = br.chain.slice();
+  (br.forks || []).forEach(function(fk){
+    fk.lanes.forEach(function(ln){ ids = ids.concat(ln.chain); });
+  });
+  return ids;
+})();
 
 /* ---------- state ---------- */
 var NODE_BY_ID = {};
@@ -521,49 +457,6 @@ function fmtCounter(c, v){
     default: return String(v);
   }
 }
-function smoothPath(x1,y1,x2,y2){
-  var dx = x2-x1, dy = y2-y1;
-  if(Math.abs(dx) >= Math.abs(dy)){
-    var c = dx*0.5;
-    return 'M'+x1+','+y1+' C'+(x1+c)+','+y1+' '+(x2-c)+','+y2+' '+x2+','+y2;
-  } else {
-    var c2 = dy*0.5;
-    return 'M'+x1+','+y1+' C'+x1+','+(y1+c2)+' '+x2+','+(y2-c2)+' '+x2+','+y2;
-  }
-}
-function rectBorderPoint(cx, cy, w, h, tx, ty){
-  var dx = tx-cx, dy = ty-cy;
-  if(dx===0 && dy===0) return { x:cx, y:cy };
-  var hw = w/2, hh = h/2;
-  var scaleX = dx!==0 ? hw/Math.abs(dx) : Infinity;
-  var scaleY = dy!==0 ? hh/Math.abs(dy) : Infinity;
-  var scale = Math.min(scaleX, scaleY);
-  return { x: cx+dx*scale, y: cy+dy*scale };
-}
-
-/* ---------- radial layout ----------
-   Every node carries a base { branchId, radialStep, angleOffset } triple (trunk and
-   stub nodes are special cases). layoutNodes() computes each node's polar center point
-   from those plus the branch axis angle and the trunk center. finalizeLayout() then
-   measures each node's real rendered height (measure-then-place, never a guessed
-   constant) and positions its DOM box centered on that point. */
-function layoutNodes(){
-  NODES.forEach(function(n){
-    if(n.kind==='trunk'){
-      n.cx = TRUNK_CX; n.cy = TRUNK_CY; n.w = TRUNK_W;
-    } else if(n.kind==='stub'){
-      var axis = BRANCH_AXIS[n.branchId];
-      var p = polar(TRUNK_CX, TRUNK_CY, STUB_R, axis);
-      n.cx = p.x; n.cy = p.y; n.w = NODE_W;
-    } else {
-      var axis2 = BRANCH_AXIS[n.branchId];
-      var r = BRANCH_START_R + (n.radialStep-1)*BRANCH_NODE_STEP;
-      var p2 = polar(TRUNK_CX, TRUNK_CY, r, axis2 + n.angleOffset);
-      n.cx = p2.x; n.cy = p2.y; n.w = NODE_W;
-    }
-  });
-}
-
 function measureNodeHeights(){
   NODES.forEach(function(n){
     var el = document.getElementById('node-'+n.id);
@@ -580,83 +473,6 @@ function measureNodeHeights(){
   });
 }
 
-function applyNodePosition(n){
-  var el = document.getElementById('node-'+n.id);
-  if(!el) return;
-  var h = n.kind==='trunk' ? TRUNK_H : nodeHeights[n.id].header;
-  n.h = h;
-  n.x = n.cx - n.w/2;
-  n.y = n.cy - h/2;
-  el.style.left = n.x+'px';
-  el.style.top = n.y+'px';
-}
-
-/* ---------- layout invariant check ----------
-   Warn-only. The Measurement Framework (see comment block at top of file) should
-   make every invariant pass by construction. If any fail, something upstream is
-   misconfigured (bad tier value, bad node placement math, node width changed
-   without recomputing BRANCH_START_R). Do NOT auto-bump; fix the root cause. */
-function _currentZoom(){ return zoom; }
-
-function checkLayoutInvariants(){
-  var trunkEl = document.querySelector('.node.trunk');
-  var trunkR = trunkEl.getBoundingClientRect();
-  var nodes = Array.prototype.slice.call(document.querySelectorAll('.node')).filter(function(el){
-    return !el.classList.contains('trunk');
-  });
-
-  // I1: no node bbox intersects trunk-clear circle
-  var trunkCX_screen = (trunkR.left + trunkR.right) / 2;
-  var trunkCY_screen = (trunkR.top + trunkR.bottom) / 2;
-  // Convert TRUNK_CLEAR_R (canvas units) to screen units via current zoom.
-  var zoomNow = _currentZoom();
-  var trunkClear_screen = TRUNK_CLEAR_R * zoomNow;
-  nodes.forEach(function(el){
-    var r = el.getBoundingClientRect();
-    var corners = [{x:r.left,y:r.top},{x:r.right,y:r.top},{x:r.left,y:r.bottom},{x:r.right,y:r.bottom}];
-    var nearest = Math.min.apply(null, corners.map(function(c){
-      var dx = c.x - trunkCX_screen, dy = c.y - trunkCY_screen;
-      return Math.sqrt(dx*dx + dy*dy);
-    }));
-    if (nearest < trunkClear_screen - 1){
-      console.warn('[layout invariant I1] node', el.dataset.id, 'enters trunk clear zone');
-    }
-  });
-
-  // I2: no two node bboxes come within GAP_TIGHT of each other (canvas space, converted to screen)
-  var gapTight_screen = GAP_TIGHT * zoomNow;
-  for (var i = 0; i < nodes.length; i++){
-    for (var j = i + 1; j < nodes.length; j++){
-      var a = nodes[i].getBoundingClientRect();
-      var b = nodes[j].getBoundingClientRect();
-      var dx = Math.max(0, Math.max(a.left, b.left) - Math.min(a.right, b.right));
-      var dy = Math.max(0, Math.max(a.top, b.top) - Math.min(a.bottom, b.bottom));
-      // If bboxes actually overlap on both axes, gap is 0 or negative. Otherwise the axis-aligned
-      // edge-to-edge gap is max(dx, dy) for corner-adjacent, or the non-zero one for edge-adjacent.
-      var gap;
-      if (dx === 0 && dy === 0){ gap = -1; }             // overlap
-      else if (dx === 0){ gap = dy; }                     // vertical only
-      else if (dy === 0){ gap = dx; }                     // horizontal only
-      else { gap = Math.sqrt(dx*dx + dy*dy); }            // corner-to-corner
-      if (gap < gapTight_screen - 1){
-        console.warn('[layout invariant I2]', nodes[i].dataset.id, 'and', nodes[j].dataset.id, 'gap', Math.round(gap/zoomNow), 'canvas-units (need', GAP_TIGHT + ')');
-      }
-    }
-  }
-
-  // I3 checked at placement time, not measurement time. Framework's SUB_FORK_ANGLE = 35 > 20 so this passes by construction.
-}
-
-function finalizeLayout(){
-  // Places every node from its measured height, then runs a single warn-only
-  // invariant check (see checkLayoutInvariants() above). The Measurement
-  // Framework's derived constants should make every invariant pass by
-  // construction; this never auto-bumps anything.
-  measureNodeHeights();
-  NODES.forEach(applyNodePosition);
-  checkLayoutInvariants();
-}
-
 /* ---------- build: node DOM ---------- */
 function buildNodes(){
   var layer = document.getElementById('nodesLayer');
@@ -669,9 +485,7 @@ function buildNodes(){
     el.id = 'node-'+n.id;
     el.setAttribute('data-id', n.id);
     if(n.branchId==='A') el.setAttribute('data-branch','A');
-    el.style.width = n.w+'px';
-    el.style.left = (n.cx - n.w/2)+'px';
-    el.style.top = (n.cy - 40)+'px';
+    el.style.width = (n.kind === 'trunk' ? WF.TOKENS.HUB_W : WF.TOKENS.CARD_W) + 'px';
 
     if(n.kind==='stub'){
       var tag = document.createElement('div');
@@ -722,72 +536,6 @@ function buildNodes(){
     el.addEventListener('click', function(e){ e.stopPropagation(); openPanel(n); });
 
     layer.appendChild(el);
-  });
-}
-
-/* ---------- build: SVG defs (arrowheads) ---------- */
-function buildSvgDefs(){
-  var svg = document.getElementById('pipesSvg');
-  var defs = document.createElementNS(NS,'defs');
-  defs.innerHTML =
-    '<marker id="mArrowMain" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" class="arrow-fill-main"></path></marker>'+
-    '<marker id="mArrowOk" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" class="arrow-fill-ok"></path></marker>';
-  svg.appendChild(defs);
-}
-
-/* ---------- build: SVG pipes ----------
-   Every edge is a real SVG path. Endpoints are the node rectangle's own border,
-   found by projecting toward the other node's center, so a pipe always starts and
-   ends right at a node's edge regardless of the two nodes' relative angle. */
-function buildPipesSvg(){
-  var svg = document.getElementById('pipesSvg');
-  svg.setAttribute('viewBox', '0 0 '+CANVAS_W+' '+CANVAS_H);
-  svg.setAttribute('width', CANVAS_W);
-  svg.setAttribute('height', CANVAS_H);
-
-  CONNECTIONS.forEach(function(conn){
-    var from = NODE_BY_ID[conn.from], to = NODE_BY_ID[conn.to];
-    var fromH = from.kind==='trunk' ? TRUNK_H : nodeHeights[from.id].header;
-    var toH = to.kind==='trunk' ? TRUNK_H : nodeHeights[to.id].header;
-    var p1 = rectBorderPoint(from.cx, from.cy, from.w, fromH, to.cx, to.cy);
-    var p2 = rectBorderPoint(to.cx, to.cy, to.w, toH, from.cx, from.cy);
-
-    var g = document.createElementNS(NS,'g');
-    g.setAttribute('class', 'pipe pipe-'+conn.kind);
-    g.setAttribute('data-type', conn.kind);
-
-    var path = document.createElementNS(NS,'path');
-    path.setAttribute('d', smoothPath(p1.x,p1.y,p2.x,p2.y));
-    path.setAttribute('marker-end', conn.kind==='feedback' ? 'url(#mArrowOk)' : 'url(#mArrowMain)');
-    g.appendChild(path);
-    svg.appendChild(g);
-
-    if(conn.kind!=='feedback'){
-      var len = path.getTotalLength();
-      var count = conn.kind==='trunk-branch' ? 5 : (conn.kind==='sub' ? 3 : 4);
-      var particles = [];
-      for(var i=0;i<count;i++){
-        var c = document.createElementNS(NS,'circle');
-        c.setAttribute('class','particle');
-        c.setAttribute('r', 3);
-        g.appendChild(c);
-        particles.push({ t: i/count, speed: randRange(0.07,0.13)*SIM_SPEED, el:c });
-      }
-      conn._path = path; conn._len = len; conn._particles = particles;
-    }
-  });
-}
-
-function updateParticles(dt){
-  CONNECTIONS.forEach(function(conn){
-    if(!conn._particles) return;
-    conn._particles.forEach(function(p){
-      p.t += p.speed*dt;
-      if(p.t>1) p.t -= 1;
-      var pt = conn._path.getPointAtLength(p.t*conn._len);
-      p.el.setAttribute('cx', pt.x);
-      p.el.setAttribute('cy', pt.y);
-    });
   });
 }
 
@@ -873,8 +621,8 @@ function positionTooltip(el, tip){
 function tagFor(n){
   if(n.kind==='trunk') return 'Trunk';
   if(n.kind==='stub') return 'Coming next';
-  var idx = BRANCH_A_IDS.indexOf(n.id);
-  return 'Branch A · node '+(idx+1)+' of '+BRANCH_A_IDS.length;
+  var idx = branchNodeIds.indexOf(n.id);
+  return 'Branch A · node '+(idx+1)+' of '+branchNodeIds.length;
 }
 
 function clearSelection(){
@@ -972,11 +720,13 @@ function setMode(minor){
   btnMajor.setAttribute('aria-pressed', String(!minor));
   btnMinor.setAttribute('aria-pressed', String(minor));
 
+  var delays = {};
   var minorNodes = NODES.filter(function(n){ return !!n.minor; });
   minorNodes.forEach(function(n, idx){
     var wrap = document.getElementById('minorwrap-'+n.id);
     if(!wrap) return;
     var delay = idx*60;
+    delays[n.id] = minor ? idx*60 : 0;
 
     if(minor){
       renderMinorContent(n, wrap);
@@ -997,6 +747,8 @@ function setMode(minor){
       }, 500);
     }
   });
+
+  if(rt) rt.setMode(minor ? 'detail' : 'overview', delays);
 }
 
 /* ---------- zoom / pan (our own, never the browser's) ---------- */
@@ -1139,7 +891,7 @@ function loop(ts){
   lastFrameTs = ts;
   simTime += dt;
   updateCounters(dt);
-  updateParticles(dt);
+  if (rt) rt.tick(dt);
   frameCount++;
   if(frameCount % 6 === 0) renderAllCounters();
   requestAnimationFrame(loop);
@@ -1148,17 +900,32 @@ function loop(ts){
 /* ---------- init ---------- */
 function init(){
   NODES.forEach(function(n){ NODE_BY_ID[n.id] = n; });
-  layoutNodes();
-
-  var inner = document.getElementById('canvasInner');
-  inner.style.width = CANVAS_W+'px';
-  inner.style.height = CANVAS_H+'px';
-
   buildNodes();
-  finalizeLayout();
+  measureNodeHeights();
 
-  buildSvgDefs();
-  buildPipesSvg();
+  var heights = {};
+  NODES.forEach(function(n){
+    heights[n.id] = {
+      overview: nodeHeights[n.id].header,
+      detail: n.minor ? nodeHeights[n.id].expanded : nodeHeights[n.id].header
+    };
+  });
+
+  rt = WF.mount({
+    workflowId: 'leadgenpro',
+    spec: WF_SPEC,
+    heights: heights,
+    canvasInner: document.getElementById('canvasInner'),
+    svg: document.getElementById('pipesSvg'),
+    cardEl: function (id) { return document.getElementById('node-' + id); },
+    getZoom: function () { return zoom; },
+    simSpeed: SIM_SPEED,
+    resetButton: document.getElementById('wfResetLayout'),
+    onDragStart: hideTooltip
+  });
+
+  CANVAS_W = rt.canvas.w;
+  CANVAS_H = rt.canvas.h;
 
   initCounters();
   renderAllCounters();
@@ -1168,11 +935,8 @@ function init(){
   requestAnimationFrame(loop);
 }
 
-if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
+function boot(){ (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(init); }
+if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', boot); } else { boot(); }
 })();
 </script>
 </body>

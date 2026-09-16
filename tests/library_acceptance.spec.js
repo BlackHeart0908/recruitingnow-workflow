@@ -10,6 +10,93 @@ async function waitForFrameLoad(page) {
   return { frameHandle, frame };
 }
 
+/* ---- Framework v2 helpers ---- */
+
+async function waitForSettled(frame, mode) {
+  await frame.waitForFunction(function (m) {
+    var r = window.__wfLayoutReport; return !!(r && r.settled && r.mode === m);
+  }, mode, { timeout: 8000 });
+  return frame.evaluate(function () { return window.__wfLayoutReport; });
+}
+
+async function canvasRect(frame, id) {
+  return frame.evaluate(function (id) {
+    var inner = document.getElementById('canvasInner');
+    var m = /scale\(([\d.]+)\)/.exec(inner.style.transform); var z = m ? parseFloat(m[1]) : 1;
+    var ir = inner.getBoundingClientRect(); var r = document.getElementById('node-' + id).getBoundingClientRect();
+    return { x: (r.left - ir.left) / z, y: (r.top - ir.top) / z, w: r.width / z, h: r.height / z, right: (r.right - ir.left) / z, bottom: (r.bottom - ir.top) / z };
+  }, id);
+}
+
+// every geometry assertion below is "plus or minus 2" against a framework token
+function near(actual, expected, tol) {
+  expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tol == null ? 2 : tol);
+}
+
+async function dragNode(page, frame, id, dx, dy) {
+  const box = await frame.locator('#node-' + id).boundingBox();
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx + dx, cy + dy, { steps: 8 });
+  await page.mouse.up();
+  return box;
+}
+
+// Finds a point inside the workflow frame that is not over a card or chrome, and from which a
+// drag of (dx, dy) still lands inside the viewport, so the page's own pan handler gets it.
+async function emptySpot(frame, dx, dy) {
+  return frame.evaluate(function (a) {
+    var vw = window.innerWidth, vh = window.innerHeight;
+    for (var gy = 0.12; gy <= 0.92; gy += 0.04) {
+      for (var gx = 0.03; gx <= 0.97; gx += 0.03) {
+        var x = Math.round(vw * gx), y = Math.round(vh * gy);
+        var tx = x + a.dx, ty = y + a.dy;
+        if (tx < 8 || tx > vw - 8 || ty < 56 || ty > vh - 8) continue;
+        var el = document.elementFromPoint(x, y);
+        if (!el) continue;
+        if (el.closest('.node') || el.closest('#topbar') || el.closest('.detail-panel') || el.closest('.tooltip')) continue;
+        return { x: x, y: y };
+      }
+    }
+    return null;
+  }, { dx: dx, dy: dy });
+}
+
+async function panFrame(page, frame, dx, dy) {
+  const frameBox = await page.locator('#frame').boundingBox();
+  let remX = dx, remY = dy;
+  for (let i = 0; i < 10 && (Math.abs(remX) > 2 || Math.abs(remY) > 2); i++) {
+    const stepX = Math.max(-380, Math.min(380, remX));
+    const stepY = Math.max(-380, Math.min(380, remY));
+    const spot = await emptySpot(frame, stepX, stepY);
+    if (!spot) return;
+    await page.mouse.move(frameBox.x + spot.x, frameBox.y + spot.y);
+    await page.mouse.down();
+    await page.mouse.move(frameBox.x + spot.x + stepX, frameBox.y + spot.y + stepY, { steps: 10 });
+    await page.mouse.up();
+    remX -= stepX; remY -= stepY;
+  }
+}
+
+// The +/- buttons step by a fixed 0.1, so exactly 100% is not reachable from an arbitrary fit
+// zoom. The page's ctrl+wheel path is multiplicative, so one wheel event lands on it exactly.
+async function zoomTo100(frame) {
+  await frame.evaluate(function () {
+    var inner = document.getElementById('canvasInner');
+    var m = /scale\(([\d.]+)\)/.exec(inner.style.transform);
+    var z = m ? parseFloat(m[1]) : 1;
+    if (!z || Math.abs(z - 1) < 0.0005) return;
+    var vp = document.getElementById('canvasViewport');
+    var r = vp.getBoundingClientRect();
+    vp.dispatchEvent(new WheelEvent('wheel', {
+      deltaY: -Math.log(1 / z) / 0.0015,        // the page applies zoom * exp(-deltaY * 0.0015)
+      ctrlKey: true, bubbles: true, cancelable: true,
+      clientX: r.left + r.width / 2, clientY: r.top + r.height / 2
+    }));
+  });
+}
+
 test('Test 1: Homepage default landing', async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
@@ -198,25 +285,22 @@ test('Test 12: LeadGenPro deep link', async ({ browser }) => {
   await context.close();
 });
 
-test('Test 13: Trunk centered in viewport', async ({ browser }) => {
+/* Test 13b replaces the old "trunk centered in viewport" test. Framework v2 deliberately
+   centres the CONTENT, not the hub: forcing the hub to the canvas centre wasted half the
+   canvas and made every card unreadably small at fit zoom. */
+test('Test 13b: LeadGenPro content centered', async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto(BASE_URL + '#leadgenpro');
   const { frame } = await waitForFrameLoad(page);
-  await page.waitForTimeout(1500); // let layout settle
+  await waitForSettled(frame, 'overview');
 
-  const result = await frame.evaluate(function () {
-    var el = document.getElementById('node-trunk');
+  const edges = await frame.evaluate(function () {
+    var el = document.getElementById('canvasInner');
     var r = el.getBoundingClientRect();
-    return {
-      cx: r.left + r.width / 2,
-      cy: r.top + r.height / 2,
-      vw: window.innerWidth,
-      vh: window.innerHeight
-    };
+    return { left: r.left, right: window.innerWidth - r.right };
   });
-  expect(Math.abs(result.cx - result.vw / 2)).toBeLessThan(40);
-  expect(Math.abs(result.cy - result.vh / 2)).toBeLessThan(40);
+  expect(Math.abs(edges.left - edges.right)).toBeLessThan(12);
   await context.close();
 });
 
@@ -339,124 +423,274 @@ test('Test 20: Full Detail toggle reveals sub-steps', async ({ browser }) => {
   await context.close();
 });
 
-/* Measurement Framework v1 invariant tests (Prompt B-fix-2). These replace the
-   old ad-hoc "24px minimum gap" test: every gap below is asserted directly
-   against the framework's own tier values, converted from screen px to canvas
-   units via the live fit-to-viewport zoom read off #canvasInner's transform. */
+/* ---------------------------------------------------------------------------
+   Framework v2 tests (Prompt B-fix-3). These replace the Measurement Framework
+   v1 invariant tests: every gap is now owned by the framework, so the tests read
+   the framework's own report and its tokens instead of restating numbers.
+   --------------------------------------------------------------------------- */
 
-test('Framework: Prospector clears trunk with GAP_BREATH', async ({ browser }) => {
-  const GAP_BREATH = 80;
+test('Framework v2: Overview inspector clean', async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto(BASE_URL + '#leadgenpro');
   const { frame } = await waitForFrameLoad(page);
-  await page.waitForTimeout(1500);
 
-  const gapCanvas = await frame.evaluate(function () {
-    var inner = document.getElementById('canvasInner');
-    var m = /scale\(([\d.]+)\)/.exec(inner.style.transform);
-    var zoom = m ? parseFloat(m[1]) : 1;
-    var trunk = document.getElementById('node-trunk').getBoundingClientRect();
-    var prospector = document.getElementById('node-prospector').getBoundingClientRect();
-    var gapScreen = prospector.left - trunk.right;
-    return gapScreen / zoom;
-  });
-
-  expect(gapCanvas).toBeGreaterThanOrEqual(GAP_BREATH * 0.9);
+  const rep = await waitForSettled(frame, 'overview');
+  expect(rep.framework).toBe('2.0.0');
+  expect(rep.violations).toEqual([]);
+  expect(rep.ok).toBe(true);
   await context.close();
 });
 
-test('Framework: consecutive Branch A axis nodes have GAP_TIGHT spacing', async ({ browser }) => {
-  const GAP_TIGHT = 40;
+test('Framework v2: Full Detail inspector clean and nothing overlaps', async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto(BASE_URL + '#leadgenpro');
   const { frame } = await waitForFrameLoad(page);
-  await page.waitForTimeout(1500);
+  await waitForSettled(frame, 'overview');
 
-  const gaps = await frame.evaluate(function () {
+  await frame.locator('#btnMinor').click();
+  const rep = await waitForSettled(frame, 'detail');
+  expect(rep.violations).toEqual([]);
+  expect(rep.ok).toBe(true);
+
+  // Independent of the inspector: measure every pair of real DOM cards in canvas units.
+  const minGap = await frame.evaluate(function () {
     var inner = document.getElementById('canvasInner');
-    var m = /scale\(([\d.]+)\)/.exec(inner.style.transform);
-    var zoom = m ? parseFloat(m[1]) : 1;
-    var prospector = document.getElementById('node-prospector').getBoundingClientRect();
-    var database = document.getElementById('node-database').getBoundingClientRect();
-    var crm = document.getElementById('node-crm').getBoundingClientRect();
+    var m = /scale\(([\d.]+)\)/.exec(inner.style.transform); var z = m ? parseFloat(m[1]) : 1;
+    var els = Array.prototype.slice.call(document.querySelectorAll('.node'));
+    var boxes = els.map(function (el) {
+      var r = el.getBoundingClientRect();
+      return { id: el.id, x0: r.left / z, y0: r.top / z, x1: r.right / z, y1: r.bottom / z };
+    });
+    function gap(a, b) {
+      var dx = Math.max(b.x0 - a.x1, a.x0 - b.x1, 0);
+      var dy = Math.max(b.y0 - a.y1, a.y0 - b.y1, 0);
+      var ox = !(b.x0 >= a.x1 || a.x0 >= b.x1), oy = !(b.y0 >= a.y1 || a.y0 >= b.y1);
+      if (ox && oy) return -1;
+      if (ox) return dy;
+      if (oy) return dx;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+    var min = Infinity;
+    for (var i = 0; i < boxes.length; i++) {
+      for (var j = i + 1; j < boxes.length; j++) min = Math.min(min, gap(boxes[i], boxes[j]));
+    }
+    return min;
+  });
+  expect(minGap).toBeGreaterThanOrEqual(71);
+  await context.close();
+});
+
+test('Framework v2: back to Overview clean', async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+  await waitForSettled(frame, 'overview');
+
+  await frame.locator('#btnMinor').click();
+  await waitForSettled(frame, 'detail');
+  await frame.locator('#btnMajor').click();
+  const rep = await waitForSettled(frame, 'overview');
+
+  expect(rep.violations).toEqual([]);
+  expect(rep.ok).toBe(true);
+  await context.close();
+});
+
+test('Framework v2: chain and lane geometry in both modes', async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+
+  for (const mode of ['overview', 'detail']) {
+    if (mode === 'detail') await frame.locator('#btnMinor').click();
+    await waitForSettled(frame, mode);
+
+    const trunk = await canvasRect(frame, 'trunk');
+    const prospector = await canvasRect(frame, 'prospector');
+    const database = await canvasRect(frame, 'database');
+    const crm = await canvasRect(frame, 'crm');
+    const whatsapp = await canvasRect(frame, 'whatsapp');
+    const coldcall = await canvasRect(frame, 'coldcall');
+    const analyzer = await canvasRect(frame, 'analyzer');
+    const coach = await canvasRect(frame, 'coach');
+
+    near(prospector.x - trunk.right, 90);      // GAP_BRANCH
+    near(database.x - prospector.right, 72);   // GAP_CHAIN
+    near(crm.x - database.right, 72);
+    near(whatsapp.x - crm.right, 90);
+    near(whatsapp.x, coldcall.x);              // both lanes start in the same column
+    near(coldcall.y - whatsapp.bottom, 72);
+    near(analyzer.x - coldcall.right, 72);
+    near(coach.x - analyzer.right, 72);
+    near(coldcall.y, analyzer.y);              // lower lane is top-aligned
+    near(analyzer.y, coach.y);
+  }
+  await context.close();
+});
+
+test('Framework v2: upper lane grows upward', async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+
+  await waitForSettled(frame, 'overview');
+  const before = await canvasRect(frame, 'whatsapp');
+
+  await frame.locator('#btnMinor').click();
+  await waitForSettled(frame, 'detail');
+  const after = await canvasRect(frame, 'whatsapp');
+
+  near(after.bottom, before.bottom);           // bottom fixed, so the fork pipe never moves
+  expect(after.h).toBeGreaterThan(before.h);
+  await context.close();
+});
+
+test('Framework v2: uniform dot speed and length-driven dot count', async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+  await waitForSettled(frame, 'overview');
+
+  const data = await frame.evaluate(function () {
+    var r = window.__wfLayoutReport;
     return {
-      prospectorToDatabase: (database.left - prospector.right) / zoom,
-      databaseToCrm: (crm.left - database.right) / zoom
+      simSpeed: r.simSpeed,
+      tokens: { DOT_SPEED_BASE: window.WF.TOKENS.DOT_SPEED_BASE, DOT_JITTER: window.WF.TOKENS.DOT_JITTER },
+      pipes: r.pipes.map(function (p) {
+        return { id: p.id, kind: p.kind, dots: p.dots, len: p.len, speedMin: p.speedMin, speedMax: p.speedMax, want: window.WF.dotCount(p.len) };
+      })
     };
   });
 
-  expect(gaps.prospectorToDatabase).toBeGreaterThanOrEqual(GAP_TIGHT * 0.9);
-  expect(gaps.prospectorToDatabase).toBeLessThanOrEqual(GAP_TIGHT * 1.15);
-  expect(gaps.databaseToCrm).toBeGreaterThanOrEqual(GAP_TIGHT * 0.9);
-  expect(gaps.databaseToCrm).toBeLessThanOrEqual(GAP_TIGHT * 1.15);
+  const base = data.tokens.DOT_SPEED_BASE * data.simSpeed;
+  let withDots = 0;
+  data.pipes.forEach(function (p) {
+    if (p.dots > 0) {
+      withDots++;
+      expect(p.speedMin).toBeGreaterThanOrEqual(base * 0.75 - 0.01);
+      expect(p.speedMax).toBeLessThanOrEqual(base * 1.25 + 0.01);
+      expect(p.dots).toBe(p.want);
+    }
+  });
+  expect(withDots).toBeGreaterThan(0);
+
+  const loop = data.pipes.filter(function (p) { return p.id === 'coach__crm'; })[0];
+  expect(loop).toBeTruthy();
+  expect(loop.kind).toBe('feedback');
+  expect(loop.dots).toBe(0);
   await context.close();
 });
 
-test('Framework: WhatsApp and Cold Call sub-branch first nodes clear GAP_ISLAND', async ({ browser }) => {
-  const GAP_ISLAND = 140;
-  const NODE_W = 200;
+test('Framework v2: drag moves a card and its pipes, and does not open the panel', async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto(BASE_URL + '#leadgenpro');
   const { frame } = await waitForFrameLoad(page);
-  await page.waitForTimeout(1500);
+  await waitForSettled(frame, 'overview');
 
-  const distCanvas = await frame.evaluate(function () {
-    var inner = document.getElementById('canvasInner');
-    var m = /scale\(([\d.]+)\)/.exec(inner.style.transform);
-    var zoom = m ? parseFloat(m[1]) : 1;
-    var wa = document.getElementById('node-whatsapp').getBoundingClientRect();
-    var cc = document.getElementById('node-coldcall').getBoundingClientRect();
-    var waCy = (wa.top + wa.bottom) / 2;
-    var ccCy = (cc.top + cc.bottom) / 2;
-    return Math.abs(waCy - ccCy) / zoom;
-  });
+  const pipeSel = 'g.pipe[data-id="prospector__database"] path';
+  const pipeBefore = await frame.locator(pipeSel).getAttribute('d');
+  const boxBefore = await dragNode(page, frame, 'database', 160, 50);
+  const boxAfter = await frame.locator('#node-database').boundingBox();
 
-  expect(distCanvas).toBeGreaterThanOrEqual(GAP_ISLAND + NODE_W * 0.9);
+  expect(boxAfter.x - boxBefore.x).toBeGreaterThan(100);
+  expect(await frame.locator(pipeSel).getAttribute('d')).not.toBe(pipeBefore);
+  await expect(frame.locator('#detailPanel')).not.toHaveClass(/open/);
+  await expect(frame.locator('#wfResetLayout')).toBeVisible();
+
+  const dragged = await frame.evaluate(function () { return window.__wfLayoutReport.dragged; });
+  expect(dragged).toContain('database');
   await context.close();
 });
 
-test('Framework: no node overlaps the trunk-clear circle', async ({ browser }) => {
-  const TRUNK_CLEAR_R = 200;
+test('Framework v2: drag survives a reload and Reset layout restores', async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto(BASE_URL + '#leadgenpro');
   const { frame } = await waitForFrameLoad(page);
-  await page.waitForTimeout(1500);
+  await waitForSettled(frame, 'overview');
 
-  const result = await frame.evaluate(function () {
-    var inner = document.getElementById('canvasInner');
-    var m = /scale\(([\d.]+)\)/.exec(inner.style.transform);
-    var zoom = m ? parseFloat(m[1]) : 1;
-    var trunk = document.getElementById('node-trunk').getBoundingClientRect();
-    var trunkCX = (trunk.left + trunk.right) / 2;
-    var trunkCY = (trunk.top + trunk.bottom) / 2;
-    var nodes = Array.prototype.slice.call(document.querySelectorAll('.node')).filter(function (el) {
-      return !el.classList.contains('trunk');
+  await dragNode(page, frame, 'database', 160, 50);
+  const movedX = (await canvasRect(frame, 'database')).x;
+
+  await page.reload();
+  const { frame: f2 } = await waitForFrameLoad(page);
+  await waitForSettled(f2, 'overview');
+  near((await canvasRect(f2, 'database')).x, movedX);
+
+  await f2.locator('#wfResetLayout').click();
+  const prospector = await canvasRect(f2, 'prospector');
+  near((await canvasRect(f2, 'database')).x, prospector.right + 72);
+  await expect(f2.locator('#wfResetLayout')).toBeHidden();
+
+  await page.reload();
+  const { frame: f3 } = await waitForFrameLoad(page);
+  await waitForSettled(f3, 'overview');
+  const prospector3 = await canvasRect(f3, 'prospector');
+  near((await canvasRect(f3, 'database')).x, prospector3.right + 72);
+  await context.close();
+});
+
+test('Framework v2: a plain click still opens the detail panel', async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+  await waitForSettled(frame, 'overview');
+
+  await frame.locator('#node-crm').click();
+  await expect(frame.locator('#detailPanel')).toHaveClass(/open/);
+  await context.close();
+});
+
+test('Framework v2: screenshots for human review', async ({ browser }) => {
+  const fs = require('fs');
+  const path = require('path');
+  const outDir = path.join(__dirname, '..', 'test-results', 'b-fix-3');
+  fs.mkdirSync(outDir, { recursive: true });
+
+  const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+  await waitForSettled(frame, 'overview');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(outDir, '01-overview-fit.png') });
+
+  await frame.locator('#btnMinor').click();
+  await waitForSettled(frame, 'detail');
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(outDir, '02-detail-fit.png') });
+
+  await frame.locator('#btnMajor').click();
+  await waitForSettled(frame, 'overview');
+  await frame.locator('body').press('0');
+  await page.waitForTimeout(200);
+  await zoomTo100(frame);
+  const focus = await frame.evaluate(function () {
+    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    ['crm', 'whatsapp', 'coldcall'].forEach(function (id) {
+      var r = document.getElementById('node-' + id).getBoundingClientRect();
+      x0 = Math.min(x0, r.left); y0 = Math.min(y0, r.top);
+      x1 = Math.max(x1, r.right); y1 = Math.max(y1, r.bottom);
     });
-    var minDist = Infinity;
-    var worst = null;
-    nodes.forEach(function (el) {
-      var r = el.getBoundingClientRect();
-      var corners = [
-        { x: r.left, y: r.top }, { x: r.right, y: r.top },
-        { x: r.left, y: r.bottom }, { x: r.right, y: r.bottom }
-      ];
-      var nearest = Math.min.apply(null, corners.map(function (c) {
-        var dx = c.x - trunkCX, dy = c.y - trunkCY;
-        return Math.sqrt(dx * dx + dy * dy);
-      }));
-      var distCanvas = nearest / zoom;
-      if (distCanvas < minDist) { minDist = distCanvas; worst = el.id; }
-    });
-    return { minDist: minDist, worst: worst };
+    return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, vw: window.innerWidth, vh: window.innerHeight };
   });
+  await panFrame(page, frame, focus.vw / 2 - focus.cx, (focus.vh + 44) / 2 - focus.cy);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(outDir, '03-overview-branch-a-100.png') });
 
-  if (result.minDist < TRUNK_CLEAR_R * 0.95) {
-    console.log(result.worst + ' is closest to trunk at ' + Math.round(result.minDist) + ' canvas units');
-  }
-  expect(result.minDist).toBeGreaterThanOrEqual(TRUNK_CLEAR_R * 0.95);
+  await frame.locator('body').press('0');
+  await page.waitForTimeout(300);
+  await dragNode(page, frame, 'database', 0, 120);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(outDir, '04-after-drag.png') });
+
   await context.close();
 });
