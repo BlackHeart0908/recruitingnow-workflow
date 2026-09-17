@@ -123,11 +123,27 @@ async function contentGaps(frame) {
   });
 }
 
-function expectCentred(g) {
+// Default view (Prompt B-Fix-1): DEFAULT_ZOOM or the width fit, centred left-right; vertically centred
+// when the content fits the height, otherwise the content top sits SIDE_PAD (24) under the top bar.
+async function expectDefaultView(frame) {
+  const g = await contentGaps(frame);
+  const d = await frame.evaluate(function () {
+    var m = /scale\(([\d.]+)\)/.exec(document.getElementById('canvasInner').style.transform);
+    return { z: m ? parseFloat(m[1]) : 1, vw: window.innerWidth, vh: window.innerHeight };
+  });
+  const contentW = d.vw - g.left - g.right;               // screen px at zoom z
+  const widthFit = (d.vw - 48) * d.z / contentW;            // zoom at which the width exactly fits
+  expect(Math.abs(d.z - Math.min(0.32, widthFit))).toBeLessThan(0.004);
   expect(Math.abs(g.left - g.right)).toBeLessThan(12);
-  expect(Math.abs(g.top - g.bottom)).toBeLessThan(12);
-  expect(Math.min(g.left, g.right, g.top, g.bottom)).toBeGreaterThanOrEqual(8);
-  expect(Math.min(g.left, g.top)).toBeLessThanOrEqual(40);   // fitted tight on the limiting axis, not shrunk to the canvas
+  expect(Math.min(g.left, g.right)).toBeGreaterThanOrEqual(8);
+  const contentH = (d.vh - g.bottom) - (44 + g.top);
+  if (contentH <= d.vh - 44 - 48) {
+    expect(Math.abs(g.top - g.bottom)).toBeLessThan(12);
+  } else {
+    expect(g.top).toBeGreaterThanOrEqual(14);
+    expect(g.top).toBeLessThanOrEqual(34);
+  }
+  return d.z;
 }
 
 test('Test 1: Homepage default landing', async ({ browser }) => {
@@ -318,8 +334,8 @@ test('Test 12: LeadGenPro deep link', async ({ browser }) => {
   await context.close();
 });
 
-/* Test 13b: the fit centres the CURRENT mode's content in both axes (Prompt B). */
-test('Test 13b: LeadGenPro content centred in both axes, both modes', async ({ browser }) => {
+/* Test 13b: the fit opens at the default view in both axes (Prompt B-Fix-1). */
+test('Test 13b: LeadGenPro opens at the default view in both modes', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
   const page = await context.newPage();
   await page.goto(BASE_URL + '#leadgenpro');
@@ -327,17 +343,17 @@ test('Test 13b: LeadGenPro content centred in both axes, both modes', async ({ b
 
   await waitForSettled(frame, 'overview');
   await page.waitForTimeout(300);
-  expectCentred(await contentGaps(frame));
+  await expectDefaultView(frame);
 
   await frame.locator('#btnMinor').click();
   await waitForSettled(frame, 'detail');
   await page.waitForTimeout(600);
-  expectCentred(await contentGaps(frame));
+  await expectDefaultView(frame);
 
   await frame.locator('#btnMajor').click();
   await waitForSettled(frame, 'overview');
   await page.waitForTimeout(600);
-  expectCentred(await contentGaps(frame));
+  await expectDefaultView(frame);
 
   const scaleBefore = await frame.evaluate(function () {
     var m = /scale\(([\d.]+)\)/.exec(document.getElementById('canvasInner').style.transform);
@@ -355,7 +371,54 @@ test('Test 13b: LeadGenPro content centred in both axes, both modes', async ({ b
 
   await frame.locator('body').press('0');
   await page.waitForTimeout(300);
-  expectCentred(await contentGaps(frame));
+  await expectDefaultView(frame);
+
+  await context.close();
+
+  const context2 = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const page2 = await context2.newPage();
+  await page2.goto(BASE_URL + '#leadgenpro');
+  const { frame: frame2 } = await waitForFrameLoad(page2);
+  await waitForSettled(frame2, 'overview');
+  await page2.waitForTimeout(300);
+  await expectDefaultView(frame2);
+  await context2.close();
+});
+
+/* Test 13c: hub to Search Brief gap is GAP_BRANCH (framework 2.1.0), and the zoom-out floor still reaches the whole tree. */
+test('Test 13c: hub to Search Brief gap is GAP_BRANCH, zoom-out floor fits the whole tree', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+
+  await waitForSettled(frame, 'overview');
+  await page.waitForTimeout(300);
+  let trunk = await canvasRect(frame, 'trunk');
+  let brief = await canvasRect(frame, 'piqBrief');
+  near(brief.y - (trunk.y + trunk.h), 90, 2);
+
+  await frame.locator('#btnMinor').click();
+  await waitForSettled(frame, 'detail');
+  await page.waitForTimeout(600);
+  trunk = await canvasRect(frame, 'trunk');
+  brief = await canvasRect(frame, 'piqBrief');
+  near(brief.y - (trunk.y + trunk.h), 90, 2);
+
+  for (let i = 0; i < 12; i++) {
+    await frame.locator('body').press('-');
+    await page.waitForTimeout(100);
+  }
+  const g = await contentGaps(frame);
+  const d = await frame.evaluate(function () {
+    var m = /scale\(([\d.]+)\)/.exec(document.getElementById('canvasInner').style.transform);
+    return { z: m ? parseFloat(m[1]) : 1, vw: window.innerWidth, vh: window.innerHeight };
+  });
+  const contentW = d.vw - g.left - g.right;
+  const contentH = (d.vh - g.bottom) - (44 + g.top);
+  const fullFit = Math.min(1, (d.vw - 48) * d.z / contentW, (d.vh - 44 - 48) * d.z / contentH);
+  expect(d.z).toBeLessThanOrEqual(0.3);
+  expect(Math.abs(d.z - Math.min(0.3, fullFit))).toBeLessThan(0.004);
 
   await context.close();
 });
@@ -701,7 +764,7 @@ test('Framework v2: Overview inspector clean', async ({ browser }) => {
   const { frame } = await waitForFrameLoad(page);
 
   const rep = await waitForSettled(frame, 'overview');
-  expect(rep.framework).toBe('2.0.0');
+  expect(rep.framework).toBe('2.1.0');
   expect(rep.violations).toEqual([]);
   expect(rep.ok).toBe(true);
   await context.close();
@@ -1022,7 +1085,7 @@ test('Prompt B: screenshots for human review', async ({ browser }) => {
   const { frame } = await waitForFrameLoad(page);
   await waitForSettled(frame, 'overview');
   await page.waitForTimeout(300);
-  await page.screenshot({ path: path.join(outDir, '01-overview-fit.png') });
+  await page.screenshot({ path: path.join(outDir, '01-overview-default.png') });
 
   await focusOnNodes(page, frame, ['piqBrief', 'piqDiscover', 'piqGate']);
   await page.screenshot({ path: path.join(outDir, '02-branch-b-top-100.png') });
@@ -1044,10 +1107,18 @@ test('Prompt B: screenshots for human review', async ({ browser }) => {
   await frame.locator('#btnMinor').click();
   await waitForSettled(frame, 'detail');
   await page.waitForTimeout(600);
-  await page.screenshot({ path: path.join(outDir, '06-detail-fit.png') });
+  await page.screenshot({ path: path.join(outDir, '06-detail-default.png') });
 
   await focusOnNodes(page, frame, ['trunk']);
   await page.screenshot({ path: path.join(outDir, '07-hub-detail-100.png') });
+
+  await frame.locator('body').press('0');
+  await page.waitForTimeout(200);
+  await frame.locator('#btnMajor').click();
+  await waitForSettled(frame, 'overview');
+  await page.waitForTimeout(300);
+  await focusOnNodes(page, frame, ['trunk', 'piqBrief']);
+  await page.screenshot({ path: path.join(outDir, '08-hub-to-brief-100.png') });
 
   await context.close();
 });

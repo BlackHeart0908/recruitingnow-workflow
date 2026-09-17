@@ -14,7 +14,7 @@ function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 
 function ri(a, b) { return a + Math.floor(rnd() * (b - a + 1)); }
 
 /* ---- 1. version + tokens ---- */
-check(WF.VERSION === '2.0.0', 'VERSION must be 2.0.0');
+check(WF.VERSION === '2.1.0', 'VERSION must be 2.1.0');
 check(Object.isFrozen(T), 'TOKENS must be frozen');
 check(T.CARD_W === 170 && T.HUB_W === 340 && T.GAP_CHAIN === 72 && T.GAP_BRANCH === 90 && T.GAP_LOOP === 45 && T.GAP_SECTOR === 120, 'tier values changed');
 check(WF.dotCount(72) === 4 && WF.dotCount(10) === T.DOT_MIN && WF.dotCount(5000) === T.DOT_MAX, 'dotCount formula');
@@ -103,6 +103,7 @@ const LGP_C_SPEC = { pattern: 'brain', hub: 'trunk',
   const cvB = WF.canvasFor(LGP_B_SPEC, LGP_B_HEIGHTS);
   const cvRef = WF.canvasFor(LGP_C_SPEC, LGP_C_HEIGHTS);
   check(cvB.shifts.A.dx === 0 && cvB.shifts.A.dy === 0 && cvB.shifts.C.dx === 0 && cvB.shifts.C.dy === 0, 'LGP B: branches A and C must not be shifted');
+  check(cvB.shifts.B.dx === 0 && cvB.shifts.B.dy === 0, 'LGP B: Branch B must not be pushed');
   ['overview', 'detail'].forEach(function (m) {
     const L = WF.layout(LGP_B_SPEC, LGP_B_HEIGHTS, m, { shifts: cvB.shifts });
     const c = L.cards;
@@ -118,7 +119,7 @@ const LGP_C_SPEC = { pattern: 'brain', hub: 'trunk',
     });
     check(near(c.piqLinkedin.y, c.piqApollo.y) && near(c.piqVault.y, c.piqApollo.y), 'LGP B ' + m + ' side cards level with Apollo Enrichment');
     check(c.piqLinkedin.x + T.CARD_W < c.piqApollo.x && c.piqVault.x > c.piqApollo.x + T.CARD_W, 'LGP B ' + m + ' LinkedIn Finder left, Vault right');
-    check(c.piqBrief.y > c.trunk.y + c.trunk.h + T.GAP_BRANCH, 'LGP B ' + m + ' Branch B pushed below the A and C lanes');
+    check(near(c.piqBrief.y - (c.trunk.y + c.trunk.h), T.GAP_BRANCH), 'LGP B ' + m + ' hub to Search Brief must be exactly GAP_BRANCH');
     const byId = {}; L.pipes.forEach(function (p) { byId[p.id] = p; });
     check(byId.trunk__piqBrief && byId.trunk__piqBrief.kind === 'trunk-branch', 'LGP B ' + m + ' hub pipe to Search Brief');
     check(byId.piqExtract__piqApollo && byId.piqExtract__piqApollo.kind === 'main', 'LGP B ' + m + ' extract to apollo is main');
@@ -126,6 +127,26 @@ const LGP_C_SPEC = { pattern: 'brain', hub: 'trunk',
     check(near(byId.piqExtract__piqLinkedin.len, byId.piqExtract__piqVault.len, 2), 'LGP B ' + m + ' side fork pipes must be mirror images');
     check(byId.pattern__radarOrch.kind === 'feedback' && byId.pattern__radarOrch.dots === 0 && byId.coach__crm.kind === 'feedback', 'LGP B ' + m + ' loops unchanged');
   });
+}
+
+/* ---- 2e. branch clearance is measured on real cards and pipes (framework 2.1.0) ---- */
+{
+  const H2 = Object.assign({}, LGP_C_HEIGHTS, {"trunk":{"overview":140,"detail":330},"piqBrief":{"overview":199,"detail":470},"piqDiscover":{"overview":199,"detail":500},"piqGate":{"overview":182,"detail":500},"piqExtract":{"overview":199,"detail":540},"piqApollo":{"overview":199,"detail":470},"piqDossier":{"overview":199,"detail":500},"piqWriter":{"overview":182,"detail":480},"piqSend":{"overview":230,"detail":540},"piqLinkedin":{"overview":199,"detail":470},"piqVault":{"overview":199,"detail":470}});
+  delete H2.stubB;
+  const brA = LGP_C_SPEC.branches.find(function (b) { return b.id === 'A'; });
+  const brC = LGP_C_SPEC.branches.find(function (b) { return b.id === 'C'; });
+  const brB = { id: 'B', dir: 'down', chain: ['piqBrief', 'piqDiscover', 'piqGate', 'piqExtract', 'piqApollo', 'piqDossier', 'piqWriter', 'piqSend'],
+    forks: [{ at: 'piqExtract', lanes: [{ side: -1, chain: ['piqLinkedin'] }, { side: 1, chain: ['piqVault'] }] }] };
+  const SPEC = { pattern: 'brain', hub: 'trunk', branches: [brA, brC, brB], loops: LGP_C_SPEC.loops };
+  const cv2 = WF.canvasFor(SPEC, H2);
+  const L = WF.layout(SPEC, H2, 'overview', { shifts: cv2.shifts });
+  check(WF.inspect(L, cv2).length === 0, '2e: the unmoved layout is clean');
+  // move one Branch B card to 100 units below Prospector: more than GAP_CHAIN (no V1) but less than GAP_SECTOR
+  const moved = {}; Object.keys(L.cards).forEach(function (id) { moved[id] = Object.assign({}, L.cards[id]); });
+  moved.piqVault.x = moved.prospector.x; moved.piqVault.y = moved.prospector.y + moved.prospector.h + 100;
+  const v2 = WF.inspect(Object.assign({}, L, { cards: moved }), null);
+  check(v2.some(function (x) { return x.code === 'V3_SECTOR'; }), '2e: a Branch B card 100 units from a Branch A card must raise V3_SECTOR');
+  check(!v2.some(function (x) { return x.code === 'V1_CARD_GAP' && [x.a, x.b].indexOf('piqVault') >= 0 && [x.a, x.b].indexOf('prospector') >= 0; }), '2e: the moved card is still more than GAP_CHAIN from Prospector');
 }
 
 /* ---- 3. random brain specs, both modes ---- */

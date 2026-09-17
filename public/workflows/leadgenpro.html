@@ -248,7 +248,7 @@ body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;colo
 
 <div id="statusLegend"><span><span class="lg-dot"></span> Built and running</span><span><span class="lg-dot dev"></span> In development</span></div>
 
-<script src="../framework/wf-framework-v2.js?v=2.0.0"></script>
+<script src="../framework/wf-framework-v2.js?v=2.1.0"></script>
 <script>
 (function(){
 'use strict';
@@ -264,7 +264,8 @@ var SIDE_PAD = 24;
 var TOPBAR_H = 44;
 
 var LAYOUT_HEIGHTS = null;   // the measured heights passed to WF.mount, kept for fit maths
-var atFit = true;            // true until the user pans or zooms; a mode toggle re-fits only while true
+var atFit = true;            // true while the view is the default view; a mode toggle or resize re-applies it only while true
+var DEFAULT_ZOOM = 0.32;     // LeadGenPro opening zoom (Aakash's choice): top of the tree fills the screen, lower ProspectIQ cards may continue below
 var viewAnim = null;         // rAF id of a running fit animation
 
 var AUTO_TOGGLE_GUARD = false;   // see the pointerdown handler on .auto-toggle below
@@ -1251,7 +1252,7 @@ function applyTransform(){
 }
 function setZoom(newZoom, anchorClientX, anchorClientY){
   cancelViewAnim(); atFit = false;
-  var minZ = Math.min(0.3, fitViewFor(currentModeName()).zoom); newZoom = Math.max(minZ, Math.min(2.5, newZoom));
+  var minZ = Math.min(0.3, contentFitZoom(currentModeName())); newZoom = Math.max(minZ, Math.min(2.5, newZoom));
   var vp = document.getElementById('canvasViewport');
   var vpRect = vp.getBoundingClientRect();
   var localX = anchorClientX - vpRect.left;
@@ -1287,12 +1288,24 @@ function contentBox(mode){
            x1: x1 + r + rt.canvas.originX, y1: y1 + r + rt.canvas.originY };
 }
 function currentModeName(){ return minorMode ? 'detail' : 'overview'; }
+/* Zoom at which the CURRENT mode's whole content fits the screen. Used only as the zoom-out floor. */
+function contentFitZoom(mode){
+  var b = contentBox(mode);
+  var vw = window.innerWidth, vh = window.innerHeight - TOPBAR_H;
+  return Math.min(1, (vw - 2*SIDE_PAD) / (b.x1 - b.x0), (vh - 2*SIDE_PAD) / (b.y1 - b.y0));
+}
+/* The default view: DEFAULT_ZOOM (or less if the width does not fit), centred left to right.
+   Vertically centred when the content fits the height, otherwise the top of the content sits SIDE_PAD under the top bar. */
 function fitViewFor(mode){
   var b = contentBox(mode);
   var vw = window.innerWidth, vh = window.innerHeight - TOPBAR_H;
   var bw = b.x1 - b.x0, bh = b.y1 - b.y0;
-  var z = Math.min(1, (vw - 2*SIDE_PAD) / bw, (vh - 2*SIDE_PAD) / bh);
-  return { zoom: z, panX: vw/2 - (b.x0 + bw/2) * z, panY: TOPBAR_H + vh/2 - (b.y0 + bh/2) * z };
+  var z = Math.min(DEFAULT_ZOOM, (vw - 2*SIDE_PAD) / bw);
+  var panX = vw/2 - (b.x0 + bw/2) * z;
+  var panY = (bh * z <= vh - 2*SIDE_PAD)
+    ? TOPBAR_H + vh/2 - (b.y0 + bh/2) * z
+    : TOPBAR_H + SIDE_PAD - b.y0 * z;
+  return { zoom: z, panX: panX, panY: panY };
 }
 function cancelViewAnim(){ if(viewAnim){ cancelAnimationFrame(viewAnim); viewAnim = null; } }
 function animateViewTo(t, ms){

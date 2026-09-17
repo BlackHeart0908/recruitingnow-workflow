@@ -243,13 +243,16 @@ checkNoStrings(
   'role="switch"',
   'aria-checked',
   'function setAutoSend',
-  'atFit'
+  'atFit',
+  'function contentFitZoom',
+  'DEFAULT_ZOOM = 0.32',
+  'wf-framework-v2.js?v=2.1.0'
 ].forEach(function (pattern) {
   checkMinHits('public/workflows/leadgenpro.html', pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 1, 'Check W');
 });
 checkNoStrings(
   'public/workflows/leadgenpro.html',
-  ['aria-hidden="true"><span class="auto-switch"'],
+  ["autoDiv.setAttribute('aria-hidden'"],
   'Check W'
 );
 
@@ -295,8 +298,8 @@ checkMinHits('public/workflows/leadgenpro.html', 'Overview vs Full Detail split 
     return;
   }
   const content = readFile(rel);
-  if (content.indexOf("VERSION = '2.0.0'") === -1) {
-    failures.push('Check Q: ' + rel + " does not declare VERSION = '2.0.0'");
+  if (content.indexOf("VERSION = '2.1.0'") === -1) {
+    failures.push('Check Q: ' + rel + " does not declare VERSION = '2.1.0'");
   }
   if (content.indexOf('function mount(') === -1) {
     failures.push('Check Q: ' + rel + ' does not define the DOM runtime function mount(');
@@ -306,6 +309,24 @@ checkMinHits('public/workflows/leadgenpro.html', 'Overview vs Full Detail split 
       failures.push('Check Q: found "' + s + '" in ' + rel);
     }
   });
+})();
+
+/* Check X: branch clearance is measured on real geometry (framework 2.1.0), not the old rectangle envelope gap */
+(function checkGeomGap() {
+  const rel = 'public/framework/wf-framework-v2.js';
+  const content = readFile(rel);
+  if (content.indexOf('function branchGeom') === -1) {
+    failures.push('Check X: ' + rel + ' does not define function branchGeom');
+  }
+  if (content.indexOf('function geomGap') === -1) {
+    failures.push('Check X: ' + rel + ' does not define function geomGap');
+  }
+  if (content.indexOf('var g = envGap(B, E);') !== -1) {
+    failures.push('Check X: ' + rel + ' still contains the old rectangle-envelope gap check "var g = envGap(B, E);"');
+  }
+  if (content.indexOf('var eg = envGap(L.envelopes') !== -1) {
+    failures.push('Check X: ' + rel + ' still contains the old rectangle-envelope inspector check "var eg = envGap(L.envelopes"');
+  }
 })();
 
 /* Check R: Measurement Framework v1 is gone from LeadGenPro and Framework v2 drives it */

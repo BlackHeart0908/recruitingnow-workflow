@@ -10,7 +10,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  var VERSION = '2.0.0';
+  var VERSION = '2.1.0';
 
   var TOKENS = Object.freeze({
     CARD_W: 170,        // every normal card
@@ -192,6 +192,27 @@
     return Math.sqrt(dx * dx + dy * dy);
   }
 
+  // Branch clearance on REAL geometry (the branch's cards + its own pipes), not the branch's bounding rectangle.
+  // card vs card and card vs pipe must keep GAP_SECTOR; pipe vs pipe is not checked (every trunk pipe meets at the hub).
+  function branchGeom(raw, bid, loops) {
+    var ids = raw.branchIds[bid], set = {};
+    ids.forEach(function (id) { set[id] = true; });
+    var boxes = ids.map(function (id) { var c = raw.cards[id]; return { x0: c.x, y0: c.y, x1: c.x + c.w, y1: c.y + c.h }; });
+    var pts = [];
+    raw.flow.forEach(function (f) { if (set[f.to]) samplePipe(buildPipe(f, raw.cards), 32).forEach(function (q) { pts.push({ x0: q.x, y0: q.y, x1: q.x, y1: q.y }); }); });
+    (loops || []).forEach(function (lp) { if (set[lp.from]) samplePipe(buildLoop(lp, raw.cards), 32).forEach(function (q) { pts.push({ x0: q.x, y0: q.y, x1: q.x, y1: q.y }); }); });
+    return { boxes: boxes, pts: pts };
+  }
+  function geomGap(A, B) {
+    var g = Infinity;
+    A.boxes.forEach(function (a) {
+      B.boxes.forEach(function (b) { g = Math.min(g, envGap(a, b)); });
+      B.pts.forEach(function (b) { g = Math.min(g, envGap(a, b)); });
+    });
+    B.boxes.forEach(function (b) { A.pts.forEach(function (a) { g = Math.min(g, envGap(a, b)); }); });
+    return g;
+  }
+
   function shiftCards(ids, cards, dx, dy) { ids.forEach(function (id) { cards[id].x += dx; cards[id].y += dy; }); }
 
   function brainRaw(spec, heights, mode, shifts) {
@@ -225,15 +246,17 @@
           var B = envelopeOf(raws[mm[0]].branchIds[br.id], raws[mm[0]].cards);
           for (var ei = 0; ei < bi; ei++) {
             var E = envelopeOf(raws[mm[1]].branchIds[spec.branches[ei].id], raws[mm[1]].cards);
-            var g = envGap(B, E);
+            var g = geomGap(branchGeom(raws[mm[0]], br.id, spec.loops), branchGeom(raws[mm[1]], spec.branches[ei].id, spec.loops));
             if (g >= T.GAP_SECTOR - 0.5) continue;
             var p;
             if (br.dir === 'down') p = E.y1 + T.GAP_SECTOR - B.y0;
             else if (br.dir === 'up') p = B.y1 - (E.y0 - T.GAP_SECTOR);
             else if (br.dir === 'right') p = E.x1 + T.GAP_SECTOR - B.x0;
             else p = B.x1 - (E.x0 - T.GAP_SECTOR);
-            // p <= 0 means the clash is on the other axis (corner case): step outward
-            need = Math.max(need, p > 0 ? p : T.GAP_SECTOR - Math.max(g, 0));
+            // real geometry apart but too close: step outward by exactly the missing clearance (the loop re-checks);
+            // overlapping geometry: jump by the envelope distance, or step outward on a corner case (p <= 0)
+            if (g >= 0) need = Math.max(need, T.GAP_SECTOR - g);
+            else need = Math.max(need, p > 0 ? p : T.GAP_SECTOR);
           }
         });
         if (need <= 0) break;
@@ -390,7 +413,7 @@
       var shifts = opts.shifts || computeShifts(spec, heights);
       raw = brainRaw(spec, heights, mode, shifts);
       envelopes = {};
-      Object.keys(raw.branchIds).forEach(function (bid) { envelopes[bid] = envelopeOf(raw.branchIds[bid], raw.cards); });
+      Object.keys(raw.branchIds).forEach(function (bid) { envelopes[bid] = envelopeOf(raw.branchIds[bid], raw.cards); envelopes[bid].ids = raw.branchIds[bid]; });
     } else if (spec.pattern === 'line') {
       raw = lineRaw(spec, heights, mode);
     } else {
@@ -472,9 +495,11 @@
     // V3 sector
     if (L.envelopes) {
       var bids = Object.keys(L.envelopes);
+      var rawL = { cards: L.cards, flow: L.flow, branchIds: {} };
+      bids.forEach(function (k) { rawL.branchIds[k] = L.envelopes[k].ids; });
       for (var a = 0; a < bids.length; a++) {
         for (var b = a + 1; b < bids.length; b++) {
-          var eg = envGap(L.envelopes[bids[a]], L.envelopes[bids[b]]);
+          var eg = geomGap(branchGeom(rawL, bids[a], L.loops), branchGeom(rawL, bids[b], L.loops));
           if (eg < T.GAP_SECTOR - 0.5) v.push({ code: 'V3_SECTOR', a: bids[a], b: bids[b], detail: 'gap ' + Math.round(eg) + ' < ' + T.GAP_SECTOR });
         }
       }

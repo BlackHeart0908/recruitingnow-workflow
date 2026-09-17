@@ -57,7 +57,7 @@ All geometry is in **canvas units** (1 unit = 1 CSS pixel at 100% zoom).
 | `GAP_CHAIN` | 72 | Card to next card, lane to lane. The base rhythm. |
 | `GAP_BRANCH` | 90 | Hub to first card; fork card to its lane column; satellite above to the row |
 | `GAP_LOOP` | 45 | How far a feedback loop runs beyond the cards it passes |
-| `GAP_SECTOR` | 120 | Minimum clearance between two different branches |
+| `GAP_SECTOR` | 120 | Minimum clearance between a card of one branch and any card or pipe of another branch |
 | `PORT_OFFSET` | 40 | Where a sideways pipe attaches: 40 units below a card's top (or above its bottom, for upper lanes) |
 | `CANVAS_PAD` | 56 | Empty margin around the content |
 | `DOT_SPACING` | 18 | One dot per 18 units of pipe |
@@ -199,7 +199,7 @@ The hub centre is the origin (0, 0). y grows downward.
 
 **Lanes on a down/up branch:** the same idea turned 90 degrees. Lanes run in columns left (`-1`) or right (`+1`) of the main column. A lane beside a continuing chain sits `GAP_CHAIN` outside the main column. A lane after the last card sits `GAP_CHAIN / 2` from the centre line. The decision uses the chain's structure, never card heights, so lanes never jump sideways during an animation.
 
-**Branches crowding each other:** after placing all branches, each branch's rectangle envelope is checked against every earlier branch. This is checked in Overview, in Full Detail, and across mixed modes (so staggered animation frames are covered too). If two envelopes are closer than `GAP_SECTOR`, the later branch moves straight outward along its own direction by exactly the missing distance. The move is computed once and used in both modes, so branches never jump when the mode changes. For LeadGenPro today, no branch moves.
+**Branches crowding each other (2.1.0):** after placing all branches, each branch's real geometry (its cards plus its own pipes and loops) is checked against every earlier branch: card to card and card to pipe must keep GAP_SECTOR (pipe to pipe is not checked, because every trunk pipe meets at the hub). This is checked in Overview, in Full Detail, and across mixed modes, so staggered animation frames are covered too. If a branch is too close, it moves straight outward along its own direction until the clearance holds. The move is computed once and used in both modes. Up to 2.0.0 the check used one rectangle around each whole branch; that pushed LeadGenPro Branch B about 650 units away from the hub because its two side cards widened the rectangle, although no card or pipe was near another branch. For LeadGenPro today, no branch moves.
 
 ---
 
@@ -261,7 +261,7 @@ Runs on the pure layout in both modes (unit tests) and in the browser after load
 |---|---|
 | `V1_CARD_GAP` | Every pair of cards is at least `GAP_CHAIN` apart, edge to edge |
 | `V2_PIPE_THROUGH_CARD` | No pipe passes through a card it does not connect |
-| `V3_SECTOR` | Branch envelopes at least `GAP_SECTOR` apart |
+| `V3_SECTOR` | Cards and pipes of different branches at least GAP_SECTOR apart (real geometry) |
 | `V4_SHORT_PIPE` | Every dot-carrying pipe at least 90% of `GAP_CHAIN` long (no flickering stubs) |
 | `V5_PORT_OFF_CARD` | A sideways port sits inside its card |
 | `V6_OUTSIDE_CANVAS` | Every card inside the canvas |
@@ -320,8 +320,9 @@ Card width is `WF.TOKENS.HUB_W` for the hub or satellite `above`, the satellite'
 
 ## 13. Versioning and caching
 
-- The page loads `../framework/wf-framework-v2.js?v=2.0.0`. A bug-fix release bumps the query string (2.0.1) so browsers fetch the new file.
+- The page loads `../framework/wf-framework-v2.js?v=2.1.0`. A bug-fix release bumps the query string (2.0.1) so browsers fetch the new file.
 - A change that would move any existing card is a breaking change: create `wf-framework-v3.js`, keep v2 in place for pages not yet moved, and add a migration prompt.
+- 2.1.0 moved cards on purpose: it was released together with the only page on v2 (LeadGenPro), which was the page being fixed. Any future card-moving change with more than one page on v2 still needs wf-framework-v3.js.
 - The file must stay free of client names (it is publicly served).
 
 ---
