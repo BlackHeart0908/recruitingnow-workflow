@@ -189,6 +189,7 @@ checkNoStrings(
 
 /* Check J: LeadGenPro node completeness */
 [
+  'Leadgenpro AI Orchestrator',
   'Prospector',
   'Lead Database',
   'CRM',
@@ -196,7 +197,6 @@ checkNoStrings(
   'Cold Call',
   'Call Analyzer',
   'AI Coach',
-  'ProspectIQ + Apollo + Email',
   'Radar Orchestrator',
   'Collector Agents',
   'Intent Judge',
@@ -205,7 +205,16 @@ checkNoStrings(
   'Pattern Engine',
   'Project Email Writer',
   'Recruitment Email Writer',
-  'Approval & Send'
+  'Approval & Send',
+  'Search Brief',
+  'Site Discovery',
+  'Relevance Gate',
+  'Deep Extraction',
+  'Apollo Enrichment',
+  'Company Dossier',
+  'LinkedIn Finder',
+  'Vault & Send to CRM',
+  'Report back required on every task'
 ].forEach(function (title) {
   var pattern = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   checkMinHits('public/workflows/leadgenpro.html', pattern, 1, 'Check J');
@@ -223,8 +232,25 @@ checkNoStrings(
 /* Check U: retired stubs gone */
 checkNoStrings(
   'public/workflows/leadgenpro.html',
-  ['stubC', 'stubD', 'IT Staffing + Email', 'LinkedIn Radar + Apollo + Email'],
+  ['stubB', 'stubC', 'stubD', 'IT Staffing + Email', 'LinkedIn Radar + Apollo + Email', 'ProspectIQ + Apollo + Email'],
   'Check U'
+);
+
+/* Check W: fit and toggle wired */
+[
+  'function contentBox',
+  'function fitViewFor',
+  'role="switch"',
+  'aria-checked',
+  'function setAutoSend',
+  'atFit'
+].forEach(function (pattern) {
+  checkMinHits('public/workflows/leadgenpro.html', pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 1, 'Check W');
+});
+checkNoStrings(
+  'public/workflows/leadgenpro.html',
+  ['aria-hidden="true"><span class="auto-switch"'],
+  'Check W'
 );
 
 /* Check V: built vs in-development marking is wired */

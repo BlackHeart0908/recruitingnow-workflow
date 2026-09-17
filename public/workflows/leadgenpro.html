@@ -15,7 +15,7 @@
   Both are shipped open for now. When the PIN gate build lands, LOCKED content moves behind AES-decrypt-in-browser or a Cloudflare Pages Function.
 -->
 <!--
-  Standing pattern for LeadGenPro branch expansions (Branch B next; Branch D retired, IT Staffing now lives inside Branch C):
+  Standing pattern for LeadGenPro branch expansions (all three branches live: A, B, C; Branch D retired, IT Staffing lives inside Branch C):
     Each new branch is authored inside THIS file, not a new file.
     The stub node for that branch is REPLACED IN PLACE with the full branch's node chain.
     Each branch expansion edits WF_SPEC (structure) and NODES (content) only; the framework places everything.
@@ -93,22 +93,28 @@ body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;colo
 .node.trunk .counter{align-items:center;}
 .node.trunk .counter-label{color:rgba(255,255,255,.72);}
 .node.trunk .counter-value{color:var(--ink);}
+.node.trunk .minor-wrap{align-self:stretch; text-align:left;}
 
 .node.stub{opacity:.42;border-style:dashed;border-color:var(--dashed-border);}
 .node.stub .node-title{font-size:14px;}
 .node.stub .node-subtitle{font-size:11.5px;}
 .stub-tag{position:absolute;top:-9px;left:12px;background:var(--ink-mute);color:var(--bg-900);font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:10px;z-index:2;}
 
-.human-in-loop-badge{position:absolute;top:-9px;right:-9px;width:20px;height:20px;border-radius:50%;background:var(--warn);color:var(--bg-900);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.4);z-index:3;}
+.human-in-loop-badge{position:absolute;top:-9px;right:-9px;width:20px;height:20px;border-radius:50%;background:var(--warn);color:var(--bg-900);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.4);z-index:3;transition:opacity .25s, transform .25s;}
 .human-in-loop-badge svg{display:block;}
+.node.auto-on .human-in-loop-badge{opacity:0; transform:scale(.6);}
 
 .node.planned{opacity:.6;filter:saturate(.35);border-color:var(--ink-dim);}
 .node.planned.selected{opacity:.6;}
 .dev-tag{position:absolute;top:-9px;left:12px;background:var(--bg-700);color:var(--ink-mute);border:1px solid var(--ink-dim);font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:10px;z-index:2;}
 
-.auto-toggle{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-dim);}
-.auto-switch{width:26px;height:14px;border-radius:7px;border:1.5px solid var(--ink-dim);position:relative;display:inline-block;}
-.auto-switch::after{content:'';position:absolute;left:2px;top:1.5px;width:8px;height:8px;border-radius:50%;background:var(--ink-dim);}
+.auto-toggle{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-dim);appearance:none;background:transparent;border:0;padding:0;font-family:inherit;line-height:inherit;cursor:pointer;}
+.auto-toggle:focus-visible{outline:2px solid var(--accent-lt); outline-offset:3px; border-radius:4px;}
+.auto-toggle.on{color:var(--accent-lt);}
+.auto-switch{width:26px;height:14px;border-radius:7px;border:1.5px solid var(--ink-dim);position:relative;display:inline-block;transition:border-color .25s, background .25s;}
+.auto-switch::after{content:'';position:absolute;left:2px;top:1.5px;width:8px;height:8px;border-radius:50%;background:var(--ink-dim);transition:transform .25s, background .25s;}
+.auto-toggle.on .auto-switch{border-color:var(--accent-lt); background:var(--accent-dim);}
+.auto-toggle.on .auto-switch::after{transform:translateX(12px); background:var(--accent-lt);}
 
 #statusLegend{position:fixed;left:16px;bottom:10px;z-index:45;pointer-events:none;display:flex;gap:14px;font-size:11px;color:var(--ink-dim);}
 .lg-dot{width:5px;height:5px;border-radius:50%;background:var(--accent-lt);display:inline-block;margin-right:6px;}
@@ -116,7 +122,10 @@ body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;colo
 
 .dp-legend-note .txt{color:var(--ink-dim);font-size:11px;}
 
-.minor-wrap{padding:0 15px;max-height:0;overflow:hidden;transition:max-height .45s cubic-bezier(.4,0,.2,1);}
+/* .38s, not the framework's .45s MODE_ANIM_MS: the reveal must be visibly settled before the
+   framework's own card-height animation (run on a separate rAF clock, same nominal duration)
+   calls itself done and re-checks DOM height -- a tied finish was an intermittent V7_DOM_DRIFT. */
+.minor-wrap{padding:0 15px;max-height:0;overflow:hidden;transition:max-height .38s cubic-bezier(.4,0,.2,1);}
 .minor-inner{padding-bottom:14px;}
 .minor-steps{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:7px;}
 .minor-steps li{display:flex;align-items:flex-start;gap:8px;}
@@ -254,17 +263,47 @@ var CANVAS_W = 0, CANVAS_H = 0;
 var SIDE_PAD = 24;
 var TOPBAR_H = 44;
 
+var LAYOUT_HEIGHTS = null;   // the measured heights passed to WF.mount, kept for fit maths
+var atFit = true;            // true until the user pans or zooms; a mode toggle re-fits only while true
+var viewAnim = null;         // rAF id of a running fit animation
+
+var AUTO_TOGGLE_GUARD = false;   // see the pointerdown handler on .auto-toggle below
+var AUTO_SEND = {};   // nodeId -> true when full automation is previewed. Not persisted: every load starts in human approval.
+function setAutoSend(id, on){
+  AUTO_SEND[id] = !!on;
+  var node = document.getElementById('node-' + id);
+  if(!node) return;
+  var btn = node.querySelector('.auto-toggle');
+  node.classList.toggle('auto-on', !!on);
+  btn.classList.toggle('on', !!on);
+  btn.setAttribute('aria-checked', String(!!on));
+  btn.querySelector('.auto-label').textContent = on ? 'Auto-send: on' : 'Auto-send: off';
+  btn.title = on ? 'Fully automated: drafts send without approval. Click to return to human approval.'
+                 : 'Human approves every email. Click to preview full automation.';
+}
+
 /* ---------- node content ---------- */
 var NODES = [
   {
-    id:'trunk', kind:'trunk', title:'Leadgenpro', subtitle:'Multi Channel Platform',
+    id:'trunk', kind:'trunk', title:'Leadgenpro AI Orchestrator', subtitle:'You talk to the assistant, it runs every branch',
     counters:[
-      { id:'branches', label:'Branches mapped', type:'fixed', value:'2 of 3', fmt:'text' }
+      { id:'branches', label:'Branches mapped', type:'fixed', value:'3 of 3', fmt:'text' },
+      { id:'reports', label:'Reports received', type:'cumulative', seed:0, rate:[0.05,0.1], fmt:'int' }
     ],
-    minor:['3 branches. A: outreach and calling. C: LinkedIn Radar. B: ProspectIQ, scheduled.'],
+    minor:[
+      'Chat assistant with tools scoped to each workspace, so it only sees that user\'s data',
+      'One advisor persona shared by the assistant and the weekly AI Coach',
+      'Weekly coaching digest written from real sales numbers',
+      { t:'Plain-language requests turned into tasks, confirmed by a human before anything runs', dev:true },
+      { t:'Scheduler that runs tasks in business hours and retries a search until the target is met', dev:true },
+      { t:'Dispatches work to Prospector, ProspectIQ, LinkedIn Radar and outreach', dev:true },
+      { t:'Report back required on every task: what was asked, what happened, the result', dev:true },
+      { t:'Remembers conversations and taught rules, with undo for every action', dev:true },
+      { t:'Night-shift pipelines and a morning digest of what ran overnight', dev:true }
+    ],
     tooltip:{
-      what:'A tree of independent branches. Each branch is its own closed loop for lead sourcing, storage, enrichment, and outreach.',
-      why:'Different lead types come from different places and need different playbooks. One monolithic pipeline would force every lead through the same steps, which loses the signal.'
+      what:'The command centre. You tell the assistant what you want in plain language; it turns that into tasks, sends each one to the right branch and requires a report back on what happened.',
+      why:'Three lead engines run by hand means three dashboards and constant switching. One assistant that plans, dispatches and checks every result lets one person run the whole operation.'
     }
   },
 
@@ -400,9 +439,201 @@ var NODES = [
   },
 
   {
-    id:'stubB', kind:'stub', branchId:'B',
-    title:'ProspectIQ + Apollo + Email', subtitle:'Company discovery, contact enrichment, cold email',
-    stubMessage:'Company discovery through ProspectIQ, contact enrichment through the Apollo API, then routed to a shared cold email outreach node. Ships in an upcoming release of the Workflow Library.'
+    id:'piqBrief', kind:'node', branchId:'B',
+    title:'Search Brief', subtitle:'Niche, services, location and target count',
+    counters:[
+      { id:'searches', label:'Searches today', type:'cumulative', seed:0, rate:[0.01,0.02], fmt:'int' },
+      { id:'target', label:'Target companies', type:'fixed', value:30, fmt:'int' }
+    ],
+    minor:[
+      'Niche, services, location and how many qualified companies to find',
+      'Cost estimate shown and confirmed before any search runs',
+      'Runs in the background with live progress and a feed of every rejected site',
+      { t:'Describe the ideal customer in plain language and the LLM plans the search', dev:true },
+      { t:'Synonym expansion, so the user no longer has to guess the right keywords', dev:true }
+    ],
+    tooltip:{
+      what:'The user states who they want: niche, services, location and how many qualified companies. The engine shows the cost before it spends anything.',
+      why:'Search credits and LLM tokens cost money. Confirming scope first means a vague brief never burns a budget on the wrong companies.'
+    }
+  },
+  {
+    id:'piqDiscover', kind:'node', branchId:'B',
+    title:'Site Discovery', subtitle:'Scans until the target count is met, never past a cap',
+    counters:[
+      { id:'scanned', label:'Sites scanned today', type:'cumulative', seed:0, rate:[0.5,0.8], fmt:'int' },
+      { id:'cap', label:'Scan cap', type:'fixed', value:'3x target', fmt:'text' }
+    ],
+    minor:[
+      'Query brain turns the brief into many searches per location',
+      'Dedicated search key pool with automatic failover, isolated from other features',
+      'Overscan loop keeps going until enough companies qualify, capped at a multiple of the target',
+      'Domains that yielded nothing before are skipped for every user',
+      { t:'Parallel page fetching to cut scan time per site', dev:true }
+    ],
+    tooltip:{
+      what:'Turns the brief into search queries, collects candidate websites and keeps scanning until enough companies qualify, never past a hard cap.',
+      why:'Most search results are directories, blogs or the wrong business. Scanning until the target is actually filled, with a ceiling, delivers the count the user asked for without an unbounded bill.'
+    }
+  },
+  {
+    id:'piqGate', kind:'node', branchId:'B',
+    title:'Relevance Gate', subtitle:'Judges each company on its own homepage',
+    counters:[
+      { id:'qualified', label:'Qualified today', type:'cumulative', seed:0, rate:[0.18,0.3], fmt:'int' },
+      { id:'pass', label:'Pass rate', type:'meanrevert', mean:33, min:28, max:38, vol:1.2, fmt:'pct0' }
+    ],
+    minor:[
+      'Every result resolved to its registrable domain, including country suffixes like .co.uk and .com.au',
+      'The company homepage is fetched and judged, never the search snippet',
+      'LLM verdict on a dedicated lane with its own budget and a shared fallback',
+      'Every rejected site listed with the reason',
+      { t:'Match on any requested service instead of requiring all of them', dev:true },
+      { t:'Bot-blocked homepages retried before a reject', dev:true }
+    ],
+    tooltip:{
+      what:'Resolves each result to the company that owns the domain, reads that company homepage and asks an LLM whether it really fits the brief.',
+      why:'A blog post or directory can mention the right keywords without being the right business. Judging the owner homepage removes those false matches before any deeper crawl is paid for.'
+    }
+  },
+  {
+    id:'piqExtract', kind:'node', branchId:'B',
+    title:'Deep Extraction', subtitle:'People, emails and a company tier',
+    counters:[
+      { id:'people', label:'People found today', type:'cumulative', seed:0, rate:[0.3,0.5], fmt:'int' },
+      { id:'verified', label:'Verified emails', type:'meanrevert', mean:58, min:50, max:66, vol:1.5, fmt:'pct0' }
+    ],
+    minor:[
+      'Crawls about, team, contact, portfolio and case study pages',
+      'Deterministic pass first, then one LLM pass per site',
+      'An email counts as verified only when it appears on the page, otherwise reported or guessed',
+      'Each company tiered A, B, C or company-only by contact quality',
+      'Search query prepared for every named person without a LinkedIn link',
+      { t:'Follows navigation links to nested team pages', dev:true },
+      { t:'Reads cleaned page text before trimming, so modern sites yield their people', dev:true }
+    ],
+    tooltip:{
+      what:'Crawls the qualified site, pulls named people, roles, emails and phones, and grades each company by how reachable it is.',
+      why:'An email is only useful if it is real. Separating verified from guessed contacts, and tiering companies on that, tells the user who to email first.'
+    }
+  },
+  {
+    id:'piqApollo', kind:'node', branchId:'B', status:'planned',
+    title:'Apollo Enrichment', subtitle:'Decision makers and work emails by company',
+    counters:[
+      { id:'enriched', label:'Contacts enriched', type:'cumulative', seed:0, rate:[0.12,0.2], fmt:'int' },
+      { id:'match', label:'Match rate', type:'meanrevert', mean:60, min:52, max:68, vol:2, fmt:'pct0' }
+    ],
+    minor:[
+      { t:'Apollo finds decision makers by company domain and role', dev:true },
+      { t:'People Enrichment returns a work email for each named person', dev:true },
+      { t:'Runs only for companies with no verified decision-maker email', dev:true },
+      { t:'Credits capped per day, every match cached per domain', dev:true },
+      { t:'Enrich buttons on CRM leads and in ProspectIQ results', dev:true }
+    ],
+    tooltip:{
+      what:'Sends the company domain and the target roles to Apollo, which returns the decision makers and their work emails.',
+      why:'Leadership of mid-size firms lives on LinkedIn and data providers, not on their websites. Enriching only the gaps spends credits where the crawl came up empty.'
+    }
+  },
+  {
+    id:'piqDossier', kind:'node', branchId:'B',
+    title:'Company Dossier', subtitle:'What they do, how and for whom, every fact cited',
+    counters:[
+      { id:'dossiers', label:'Dossiers built', type:'cumulative', seed:0, rate:[0.15,0.25], fmt:'int' },
+      { id:'cited', label:'Facts with a source', type:'fixed', value:'100%', fmt:'text' }
+    ],
+    minor:[
+      'Crawl slots ranked by signal value, so a short crawl keeps the pages that matter',
+      'Deterministic extraction before any model reads the pages',
+      'The model cites a page index, never a URL, so no source can be invented',
+      'Vendor check: a company that sells the same service never gets a partnership pitch',
+      { t:'Automatic handoff of every qualified ProspectIQ company', dev:true },
+      { t:'Reuses the ProspectIQ crawl instead of fetching the site twice', dev:true }
+    ],
+    tooltip:{
+      what:'Builds a short research file on each company: what it does, how, who it serves and why that matters, with a source page for every fact.',
+      why:'Replies come from emails that read like someone studied the business. Citing every fact keeps the personalisation true, so nothing in the email is made up.'
+    }
+  },
+  {
+    id:'piqWriter', kind:'node', branchId:'B',
+    title:'Email Writer', subtitle:'Custom email from the dossier and the brief',
+    counters:[
+      { id:'drafts', label:'Drafts today', type:'cumulative', seed:0, rate:[0.14,0.24], fmt:'int' },
+      { id:'critic', label:'Critic pass', type:'meanrevert', mean:85, min:79, max:91, vol:1.5, fmt:'pct0' }
+    ],
+    minor:[
+      'LLM writer on a pinned lane with its own daily budget',
+      'Critic model reviews every draft before approval',
+      'Validator blocks any claim that does not trace to the dossier or a case study',
+      'Similar past project matched as proof',
+      { t:'Offer matched to the service gaps found on the site', dev:true },
+      { t:'Lighter template when research finds nothing', dev:true }
+    ],
+    tooltip:{
+      what:'Writes a short email from the company dossier, the services in the brief and a relevant past project, then a critic checks it.',
+      why:'A generic pitch gets deleted. An email grounded in what the company actually does, and checked before a human sees it, earns the reply.'
+    }
+  },
+  {
+    id:'piqSend', kind:'node', branchId:'B', badge:'human', autoToggle:true,
+    title:'Approval & Send', subtitle:'Human approves, sent in local business hours',
+    counters:[
+      { id:'sent', label:'Sent today', type:'cumulative', seed:0, rate:[0.12,0.2], fmt:'int' },
+      { id:'reply', label:'Reply rate', type:'meanrevert', mean:5, min:3, max:7, vol:0.5, fmt:'pct0' }
+    ],
+    minor:[
+      'Every draft approved by a human before it can send',
+      'Scheduled in the recipient local time, held when the timezone is unknown',
+      'Mailbox pool with warm-up ramp, per-domain limits and a bounce breaker',
+      'A reply stops follow-ups, checked again at the moment of sending',
+      'Inbox lets a human answer in thread without touching the campaign',
+      { t:'Auto-send switch: runs without approval once drafts prove out', dev:true }
+    ],
+    tooltip:{
+      what:'A human approves each draft. The engine picks a mailbox, schedules it in the recipient local hours, sends follow-ups and stops the moment someone replies.',
+      why:'A cold list burns fast if one bad email goes out. Approval protects the reputation now, and the auto-send switch hands the loop to the machine once the drafts earn it.'
+    }
+  },
+  {
+    id:'piqLinkedin', kind:'node', branchId:'B',
+    title:'LinkedIn Finder', subtitle:'Finds the profile for each named person',
+    counters:[
+      { id:'profiles', label:'Profiles found', type:'cumulative', seed:0, rate:[0.12,0.2], fmt:'int' },
+      { id:'auto', label:'Auto-matched', type:'meanrevert', mean:55, min:48, max:62, vol:1.5, fmt:'pct0' }
+    ],
+    minor:[
+      'Search lookup scores candidates by name in the profile link, company and location',
+      'Clear winner saved automatically, otherwise up to 3 candidates to pick from',
+      'Browser extension opens one people search at a time and captures the right profile on click',
+      'Clipboard fallback when the extension is offline',
+      'A found profile upgrades the contact tier from B to A'
+    ],
+    tooltip:{
+      what:'For every person found on a company site, finds their LinkedIn profile: automatically when the match is clear, with one click when it is not.',
+      why:'A name and a role are only half a contact. The profile confirms the person still works there and opens a second channel beside email.'
+    }
+  },
+  {
+    id:'piqVault', kind:'node', branchId:'B',
+    title:'Vault & Send to CRM', subtitle:'Every scan saved, one click into the pipeline',
+    counters:[
+      { id:'vault', label:'Companies in vault', type:'fixed', value:640, fmt:'int-comma' },
+      { id:'crm', label:'Sent to CRM today', type:'cumulative', seed:0, rate:[0.05,0.1], fmt:'int' }
+    ],
+    minor:[
+      'Every scanned company saved per workspace, isolated from other users',
+      'Past scans browsable without paying for them again',
+      'Single-site deep scan kept as its own tab',
+      { t:'Send to CRM carries every contact, email and person', dev:true },
+      { t:'Company names cleaned from site titles', dev:true },
+      { t:'Suppress a company on request for data protection', dev:true }
+    ],
+    tooltip:{
+      what:'Stores every scanned company and its contacts, and pushes the ones worth calling into the CRM pipeline in Branch A.',
+      why:'Scans cost money, so none should run twice. Handing qualified companies to the CRM puts ProspectIQ results into the same calling and follow-up flow as every other lead.'
+    }
   },
   {
     id:'radarOrch', kind:'node', branchId:'C',
@@ -605,19 +836,27 @@ var NODES = [
 var WF_SPEC = {
   pattern: 'brain',
   hub: 'trunk',
+  /* Order matters: the framework pushes LATER branches clear of earlier ones.
+     B is last so only ProspectIQ moves; Prospector and Radar keep their Prompt C positions. */
   branches: [
     { id: 'A', dir: 'right', chain: ['prospector', 'database', 'crm'],
       forks: [{ at: 'crm', lanes: [
         { side: -1, chain: ['whatsapp'] },
         { side:  1, chain: ['coldcall', 'analyzer', 'coach'] }
       ] }] },
-    { id: 'B', dir: 'down',  chain: ['stubB'] },
     { id: 'C', dir: 'left',  chain: ['radarOrch', 'collector', 'judge', 'contact', 'radarDb'],
       forks: [
         { at: 'judge',   lanes: [ { side: -1, chain: ['pattern'] } ] },
         { at: 'radarDb', lanes: [
           { side: -1, chain: ['projWriter', 'projSend'] },
           { side:  1, chain: ['recWriter', 'recSend'] }
+        ] }
+      ] },
+    { id: 'B', dir: 'down',  chain: ['piqBrief', 'piqDiscover', 'piqGate', 'piqExtract', 'piqApollo', 'piqDossier', 'piqWriter', 'piqSend'],
+      forks: [
+        { at: 'piqExtract', lanes: [
+          { side: -1, chain: ['piqLinkedin'] },
+          { side:  1, chain: ['piqVault'] }
         ] }
       ] }
   ],
@@ -750,11 +989,16 @@ function buildNodes(){
     }
 
     if(n.autoToggle){
-      var autoDiv = document.createElement('div');
-      autoDiv.className = 'auto-toggle';
-      autoDiv.setAttribute('aria-hidden','true');
-      autoDiv.innerHTML = '<span class="auto-switch"></span><span>Auto-send: off</span>';
-      header.appendChild(autoDiv);
+      var autoWrap = document.createElement('div');
+      autoWrap.innerHTML = '<button type="button" class="auto-toggle" role="switch" aria-checked="false" data-node="'+escapeHtml(n.id)+'" aria-label="Auto-send" title="Human approves every email. Click to preview full automation."><span class="auto-switch"></span><span class="auto-label">Auto-send: off</span></button>';
+      var autoBtn = autoWrap.firstElementChild;
+      /* A press that starts on the tiny switch and releases just outside it (a short drag, an
+         imprecise tap) resolves the browser's native click to the header, the nearest common
+         ancestor of the two targets -- bypassing this button's own stopPropagation entirely.
+         AUTO_TOGGLE_GUARD catches that click at the card level so it can never open the panel. */
+      autoBtn.addEventListener('pointerdown', function(e){ e.stopPropagation(); AUTO_TOGGLE_GUARD = true; });
+      autoBtn.addEventListener('click', function(e){ e.stopPropagation(); e.preventDefault(); AUTO_TOGGLE_GUARD = false; setAutoSend(n.id, !AUTO_SEND[n.id]); });
+      header.appendChild(autoBtn);
     }
 
     if(n.minor){
@@ -766,7 +1010,11 @@ function buildNodes(){
 
     el.addEventListener('mouseenter', function(){ if(n.tooltip) showTooltip(n, el); });
     el.addEventListener('mouseleave', hideTooltip);
-    el.addEventListener('click', function(e){ e.stopPropagation(); openPanel(n); });
+    el.addEventListener('click', function(e){
+      e.stopPropagation();
+      if(AUTO_TOGGLE_GUARD){ AUTO_TOGGLE_GUARD = false; return; }
+      openPanel(n);
+    });
 
     layer.appendChild(el);
   });
@@ -949,6 +1197,7 @@ function renderMinorContent(n, wrap){
 function setMode(minor){
   if(minor===minorMode) return;
   minorMode = minor;
+  if(atFit) animateViewTo(fitViewFor(minor ? 'detail' : 'overview'), WF.TOKENS.MODE_ANIM_MS);
   modeVersion++;
   var myVersion = modeVersion;
 
@@ -978,12 +1227,17 @@ function setMode(minor){
         wrap.classList.add('open');
       }, delay);
     } else {
+      /* Collapse instantly, not via the .45s CSS transition: the framework's own overview
+         height animation and this transition are two independently-timed clocks, and under
+         load their completions can land a frame apart -- the inspector then catches the wrap
+         mid-collapse and reports a spurious few-px drift. Snapping removes the race entirely;
+         only the reveal (expand) keeps the animated transition. */
+      wrap.style.transition = 'none';
       wrap.style.maxHeight = '0px';
       wrap.classList.remove('open');
-      setTimeout(function(){
-        if(modeVersion!==myVersion) return;
-        wrap.innerHTML = '';
-      }, 500);
+      wrap.innerHTML = '';
+      void wrap.offsetHeight;
+      wrap.style.transition = '';
     }
   });
 
@@ -996,7 +1250,8 @@ function applyTransform(){
   document.getElementById('zoomPct').textContent = Math.round(zoom*100)+'%';
 }
 function setZoom(newZoom, anchorClientX, anchorClientY){
-  newZoom = Math.max(0.3, Math.min(2.5, newZoom));
+  cancelViewAnim(); atFit = false;
+  var minZ = Math.min(0.3, fitViewFor(currentModeName()).zoom); newZoom = Math.max(minZ, Math.min(2.5, newZoom));
   var vp = document.getElementById('canvasViewport');
   var vpRect = vp.getBoundingClientRect();
   var localX = anchorClientX - vpRect.left;
@@ -1013,13 +1268,52 @@ function zoomBy(delta){
   var r = vp.getBoundingClientRect();
   setZoom(zoom+delta, r.left+r.width/2, r.top+r.height/2);
 }
+/* Fit the CURRENT mode's content, not the canvas. The canvas is the union of both modes,
+   so fitting it would shrink Overview to the Full Detail height and push the tree off centre. */
+function contentBox(mode){
+  var L = WF.layout(WF_SPEC, LAYOUT_HEIGHTS, mode, { shifts: rt.canvas.shifts });
+  var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  Object.keys(L.cards).forEach(function(id){
+    var c = L.cards[id];
+    x0 = Math.min(x0, c.x); y0 = Math.min(y0, c.y); x1 = Math.max(x1, c.x + c.w); y1 = Math.max(y1, c.y + c.h);
+  });
+  L.pipes.forEach(function(p){
+    WF.samplePipe(p, 32).forEach(function(s){
+      x0 = Math.min(x0, s.x); y0 = Math.min(y0, s.y); x1 = Math.max(x1, s.x); y1 = Math.max(y1, s.y);
+    });
+  });
+  var r = WF.TOKENS.DOT_R;
+  return { x0: x0 - r + rt.canvas.originX, y0: y0 - r + rt.canvas.originY,
+           x1: x1 + r + rt.canvas.originX, y1: y1 + r + rt.canvas.originY };
+}
+function currentModeName(){ return minorMode ? 'detail' : 'overview'; }
+function fitViewFor(mode){
+  var b = contentBox(mode);
+  var vw = window.innerWidth, vh = window.innerHeight - TOPBAR_H;
+  var bw = b.x1 - b.x0, bh = b.y1 - b.y0;
+  var z = Math.min(1, (vw - 2*SIDE_PAD) / bw, (vh - 2*SIDE_PAD) / bh);
+  return { zoom: z, panX: vw/2 - (b.x0 + bw/2) * z, panY: TOPBAR_H + vh/2 - (b.y0 + bh/2) * z };
+}
+function cancelViewAnim(){ if(viewAnim){ cancelAnimationFrame(viewAnim); viewAnim = null; } }
+function animateViewTo(t, ms){
+  cancelViewAnim();
+  var from = { zoom: zoom, panX: panX, panY: panY }, start = performance.now();
+  function ease(x){ return x < .5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3) / 2; }
+  function step(now){
+    var k = Math.min(1, (now - start) / ms), e = ease(k);
+    zoom = from.zoom + (t.zoom - from.zoom) * e;
+    panX = from.panX + (t.panX - from.panX) * e;
+    panY = from.panY + (t.panY - from.panY) * e;
+    applyTransform();
+    viewAnim = k < 1 ? requestAnimationFrame(step) : null;
+  }
+  viewAnim = requestAnimationFrame(step);
+}
 function resetZoom(){
-  var vw = window.innerWidth;
-  var vh = window.innerHeight - TOPBAR_H;
-  var fitZoom = Math.min(1, Math.min((vw - 2*SIDE_PAD) / CANVAS_W, (vh - 2*SIDE_PAD) / CANVAS_H));
-  zoom = fitZoom;
-  panX = (vw - CANVAS_W * fitZoom) / 2;
-  panY = (vh - CANVAS_H * fitZoom) / 2 + TOPBAR_H;
+  cancelViewAnim();
+  var v = fitViewFor(currentModeName());
+  zoom = v.zoom; panX = v.panX; panY = v.panY;
+  atFit = true;
   applyTransform();
 }
 function initZoomPan(){
@@ -1035,6 +1329,7 @@ function initZoomPan(){
 
   vp.addEventListener('pointerdown', function(e){
     if(e.target.closest('.node')) return;
+    cancelViewAnim();
     try { vp.setPointerCapture(e.pointerId); } catch(err){ /* not every synthetic/edge-case pointerId is capturable */ }
     activePointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
 
@@ -1067,7 +1362,7 @@ function initZoomPan(){
 
     if(!isDragging) return;
     var dx = e.clientX-dragStartClientX, dy = e.clientY-dragStartClientY;
-    if(Math.abs(dx)>4 || Math.abs(dy)>4) dragMoved = true;
+    if(Math.abs(dx)>4 || Math.abs(dy)>4){ dragMoved = true; atFit = false; }
     panX = dragStartPanX+dx; panY = dragStartPanY+dy;
     applyTransform();
   });
@@ -1084,6 +1379,9 @@ function initZoomPan(){
     }
   }
   window.addEventListener('pointerup', releasePointer);
+  // Safety net: clears AUTO_TOGGLE_GUARD after the click that follows a pointerup has had
+  // its turn, in case that click never arrives (e.g. a drag released off-window).
+  window.addEventListener('pointerup', function(){ setTimeout(function(){ AUTO_TOGGLE_GUARD = false; }, 0); }, true);
   window.addEventListener('pointercancel', releasePointer);
 
   vp.addEventListener('wheel', function(e){
@@ -1104,6 +1402,8 @@ function initZoomPan(){
     else if(e.key==='-'){ zoomBy(-0.1); e.preventDefault(); }
     else if(e.key==='0'){ resetZoom(); e.preventDefault(); }
   });
+
+  window.addEventListener('resize', function(){ if(atFit) resetZoom(); });
 }
 
 /* ---------- UI bindings ---------- */
@@ -1140,6 +1440,12 @@ function loop(ts){
 function init(){
   NODES.forEach(function(n){ NODE_BY_ID[n.id] = n; });
   buildNodes();
+  /* Counters must show their real rendered text BEFORE heights are measured: a 2-counter row
+     that fits with the "-" placeholder can wrap once real values (e.g. "3x target", "100%")
+     are in, and the inspector re-checks DOM height against this measurement on every later
+     mode switch -- so measuring against the placeholder left an intermittent drift violation. */
+  initCounters();
+  renderAllCounters();
   measureNodeHeights();
 
   var heights = {};
@@ -1149,6 +1455,7 @@ function init(){
       detail: n.minor ? nodeHeights[n.id].expanded : nodeHeights[n.id].header
     };
   });
+  LAYOUT_HEIGHTS = heights;
 
   rt = WF.mount({
     workflowId: 'leadgenpro',
@@ -1166,8 +1473,6 @@ function init(){
   CANVAS_W = rt.canvas.w;
   CANVAS_H = rt.canvas.h;
 
-  initCounters();
-  renderAllCounters();
   bindUI();
   initZoomPan();
 

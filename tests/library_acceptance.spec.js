@@ -97,6 +97,39 @@ async function zoomTo100(frame) {
   });
 }
 
+async function focusOnNodes(page, frame, ids) {
+  await frame.locator('body').press('0');
+  await page.waitForTimeout(200);
+  await zoomTo100(frame);
+  const focus = await frame.evaluate(function (fids) {
+    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    fids.forEach(function (id) {
+      var r = document.getElementById('node-' + id).getBoundingClientRect();
+      x0 = Math.min(x0, r.left); y0 = Math.min(y0, r.top); x1 = Math.max(x1, r.right); y1 = Math.max(y1, r.bottom);
+    });
+    return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, vw: window.innerWidth, vh: window.innerHeight };
+  }, ids);
+  await panFrame(page, frame, focus.vw / 2 - focus.cx, (focus.vh + 44) / 2 - focus.cy);
+  await page.waitForTimeout(300);
+}
+
+async function contentGaps(frame) {
+  return frame.evaluate(function () {
+    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    function add(r) { if (!r.width && !r.height) return; x0 = Math.min(x0, r.left); y0 = Math.min(y0, r.top); x1 = Math.max(x1, r.right); y1 = Math.max(y1, r.bottom); }
+    document.querySelectorAll('.node').forEach(function (el) { add(el.getBoundingClientRect()); });
+    document.querySelectorAll('#wfPipes .pipe').forEach(function (el) { add(el.getBoundingClientRect()); });
+    return { left: x0, right: window.innerWidth - x1, top: y0 - 44, bottom: window.innerHeight - y1 };
+  });
+}
+
+function expectCentred(g) {
+  expect(Math.abs(g.left - g.right)).toBeLessThan(12);
+  expect(Math.abs(g.top - g.bottom)).toBeLessThan(12);
+  expect(Math.min(g.left, g.right, g.top, g.bottom)).toBeGreaterThanOrEqual(8);
+  expect(Math.min(g.left, g.top)).toBeLessThanOrEqual(40);   // fitted tight on the limiting axis, not shrunk to the canvas
+}
+
 test('Test 1: Homepage default landing', async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
@@ -285,22 +318,45 @@ test('Test 12: LeadGenPro deep link', async ({ browser }) => {
   await context.close();
 });
 
-/* Test 13b replaces the old "trunk centered in viewport" test. Framework v2 deliberately
-   centres the CONTENT, not the hub: forcing the hub to the canvas centre wasted half the
-   canvas and made every card unreadably small at fit zoom. */
-test('Test 13b: LeadGenPro content centered', async ({ browser }) => {
-  const context = await browser.newContext();
+/* Test 13b: the fit centres the CURRENT mode's content in both axes (Prompt B). */
+test('Test 13b: LeadGenPro content centred in both axes, both modes', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
   const page = await context.newPage();
   await page.goto(BASE_URL + '#leadgenpro');
   const { frame } = await waitForFrameLoad(page);
-  await waitForSettled(frame, 'overview');
 
-  const edges = await frame.evaluate(function () {
-    var el = document.getElementById('canvasInner');
-    var r = el.getBoundingClientRect();
-    return { left: r.left, right: window.innerWidth - r.right };
+  await waitForSettled(frame, 'overview');
+  await page.waitForTimeout(300);
+  expectCentred(await contentGaps(frame));
+
+  await frame.locator('#btnMinor').click();
+  await waitForSettled(frame, 'detail');
+  await page.waitForTimeout(600);
+  expectCentred(await contentGaps(frame));
+
+  await frame.locator('#btnMajor').click();
+  await waitForSettled(frame, 'overview');
+  await page.waitForTimeout(600);
+  expectCentred(await contentGaps(frame));
+
+  const scaleBefore = await frame.evaluate(function () {
+    var m = /scale\(([\d.]+)\)/.exec(document.getElementById('canvasInner').style.transform);
+    return m ? parseFloat(m[1]) : 1;
   });
-  expect(Math.abs(edges.left - edges.right)).toBeLessThan(12);
+  await panFrame(page, frame, 150, 0);
+  await frame.locator('#btnMinor').click();
+  await waitForSettled(frame, 'detail');
+  await page.waitForTimeout(600);
+  const scaleAfter = await frame.evaluate(function () {
+    var m = /scale\(([\d.]+)\)/.exec(document.getElementById('canvasInner').style.transform);
+    return m ? parseFloat(m[1]) : 1;
+  });
+  expect(Math.abs(scaleAfter - scaleBefore)).toBeLessThan(0.001);
+
+  await frame.locator('body').press('0');
+  await page.waitForTimeout(300);
+  expectCentred(await contentGaps(frame));
+
   await context.close();
 });
 
@@ -328,27 +384,28 @@ test('Test 14c: Branch C has exactly 10 detailed nodes', async ({ browser }) => 
   await context.close();
 });
 
-test('Test 15: Stubs present and dimmed', async ({ browser }) => {
-  // Prompt C: Branch C live, Branch D retired -- only stubB (ProspectIQ) remains a stub.
+test('Test 14b: Branch B has exactly 10 detailed nodes', async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto(BASE_URL + '#leadgenpro');
   const { frame } = await waitForFrameLoad(page);
   await page.waitForTimeout(500);
 
-  const stubs = frame.locator('.node.stub');
-  const count = await stubs.count();
-  expect(count).toBe(1);
-  for (let i = 0; i < count; i++) {
-    const stub = stubs.nth(i);
-    const opacity = await stub.evaluate(function (el) {
-      return parseFloat(getComputedStyle(el).opacity);
-    });
-    expect(opacity).toBeGreaterThanOrEqual(0.35);
-    expect(opacity).toBeLessThanOrEqual(0.50);
-    await expect(stub).toContainText('COMING NEXT');
-    await expect(stub).toContainText('ProspectIQ');
-  }
+  const count = await frame.locator('.node[data-branch="B"]').count();
+  expect(count).toBe(10);
+  await context.close();
+});
+
+// Prompt B: Branch B live, every LeadGenPro branch is built out
+test('Test 15: no stubs remain', async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+  await page.waitForTimeout(500);
+
+  const count = await frame.locator('.node.stub').count();
+  expect(count).toBe(0);
   await context.close();
 });
 
@@ -363,6 +420,18 @@ test('Test 16: Cold Call human-in-loop badge', async ({ browser }) => {
   await context.close();
 });
 
+test('Test 16b: Approval & Send (piqSend) carries the human badge and Auto-send switch', async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+  await page.waitForTimeout(500);
+
+  await expect(frame.locator('#node-piqSend .human-in-loop-badge')).toHaveCount(1);
+  await expect(frame.locator('#node-piqSend .auto-toggle')).toHaveCount(1);
+  await context.close();
+});
+
 test('Test 16c: Approval & Send cards carry the human badge and Auto-send switch', async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
@@ -374,6 +443,71 @@ test('Test 16c: Approval & Send cards carry the human badge and Auto-send switch
   await expect(frame.locator('#node-recSend .human-in-loop-badge')).toHaveCount(1);
   await expect(frame.locator('#node-projSend .auto-toggle')).toHaveCount(1);
   await expect(frame.locator('#node-recSend .auto-toggle')).toHaveCount(1);
+  await context.close();
+});
+
+test('Test 16e: Auto-send toggle works', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+  await waitForSettled(frame, 'overview');
+
+  const ids = ['piqSend', 'projSend', 'recSend'];
+  for (const id of ids) {
+    await focusOnNodes(page, frame, [id]);
+    const recorded = await canvasRect(frame, id);
+
+    const toggle = frame.locator('#node-' + id + ' .auto-toggle');
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await expect(toggle).toContainText('Auto-send: off');
+
+    await toggle.click({ force: true });
+    await expect(toggle).toHaveAttribute('aria-checked', 'true');
+    await expect(toggle).toHaveClass(/on/);
+    await expect(toggle).toContainText('Auto-send: on');
+    await expect(frame.locator('#node-' + id)).toHaveClass(/auto-on/);
+    await expect(frame.locator('#detailPanel')).not.toHaveClass(/open/);
+    const draggedAfterClick = await frame.evaluate(function () { return window.__wfLayoutReport.dragged; });
+    expect(draggedAfterClick.length).toBe(0);
+    const rectAfterClick = await canvasRect(frame, id);
+    near(rectAfterClick.x, recorded.x, 1);
+    near(rectAfterClick.y, recorded.y, 1);
+
+    await page.waitForTimeout(400);
+    const opacityOn = await frame.locator('#node-' + id + ' .human-in-loop-badge').evaluate(function (el) {
+      return parseFloat(getComputedStyle(el).opacity);
+    });
+    expect(opacityOn).toBeLessThan(0.05);
+
+    await toggle.focus();
+    await page.keyboard.press('Space');
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await page.waitForTimeout(400);
+    const opacityOff = await frame.locator('#node-' + id + ' .human-in-loop-badge').evaluate(function (el) {
+      return parseFloat(getComputedStyle(el).opacity);
+    });
+    expect(opacityOff).toBeGreaterThan(0.95);
+
+    const toggleBox = await toggle.boundingBox();
+    await page.mouse.move(toggleBox.x + toggleBox.width / 2, toggleBox.y + toggleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(toggleBox.x + toggleBox.width / 2 + 60, toggleBox.y + toggleBox.height / 2, { steps: 10 });
+    await page.mouse.up();
+    const rectAfterDrag = await canvasRect(frame, id);
+    near(rectAfterDrag.x, recorded.x, 1);
+    near(rectAfterDrag.y, recorded.y, 1);
+    const draggedAfterDrag = await frame.evaluate(function () { return window.__wfLayoutReport.dragged; });
+    expect(draggedAfterDrag.length).toBe(0);
+
+    if (id === 'piqSend') {
+      await toggle.click({ force: true });
+      await expect(toggle).toHaveAttribute('aria-checked', 'true');
+      await expect(frame.locator('#node-projSend .auto-toggle')).toHaveAttribute('aria-checked', 'false');
+      await toggle.click({ force: true });
+      await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    }
+  }
   await context.close();
 });
 
@@ -478,17 +612,59 @@ test('Test 20c: built vs in-development marking', async ({ browser }) => {
   expect(builtCount).toBeGreaterThan(0);
 
   const planned = frame.locator('.node.planned');
-  await expect(planned).toHaveCount(1);
-  await expect(planned).toHaveAttribute('id', 'node-contact');
-  await expect(planned).toContainText('IN DEVELOPMENT');
-  const plannedOpacity = await planned.evaluate(function (el) {
-    return parseFloat(getComputedStyle(el).opacity);
-  });
-  expect(plannedOpacity).toBeGreaterThanOrEqual(0.55);
-  expect(plannedOpacity).toBeLessThanOrEqual(0.65);
+  await expect(planned).toHaveCount(2);
+  const plannedIds = await planned.evaluateAll(function (els) { return els.map(function (el) { return el.id; }).sort(); });
+  expect(plannedIds).toEqual(['node-contact', 'node-piqApollo']);
+  for (let i = 0; i < 2; i++) {
+    const p = planned.nth(i);
+    await expect(p).toContainText('IN DEVELOPMENT');
+    const plannedOpacity = await p.evaluate(function (el) {
+      return parseFloat(getComputedStyle(el).opacity);
+    });
+    expect(plannedOpacity).toBeGreaterThanOrEqual(0.55);
+    expect(plannedOpacity).toBeLessThanOrEqual(0.65);
+  }
 
   await expect(frame.locator('.node.planned.stub')).toHaveCount(0);
   await expect(frame.locator('#statusLegend')).toBeVisible();
+
+  const branchBNodes = frame.locator('.node[data-branch="B"]');
+  const bCount = await branchBNodes.count();
+  for (let i = 0; i < bCount; i++) {
+    const liCount = await branchBNodes.nth(i).locator('.minor-steps li').count();
+    expect(liCount).toBeGreaterThanOrEqual(4);
+  }
+  const bDevCount = await frame.locator('.node[data-branch="B"] .minor-steps li.dev').count();
+  const bBuiltCount = await frame.locator('.node[data-branch="B"] .minor-steps li:not(.dev)').count();
+  expect(bDevCount).toBeGreaterThan(0);
+  expect(bBuiltCount).toBeGreaterThan(0);
+
+  const hubDevCount = await frame.locator('#node-trunk .minor-steps li.dev').count();
+  const hubBuiltCount = await frame.locator('#node-trunk .minor-steps li:not(.dev)').count();
+  expect(hubDevCount).toBeGreaterThan(0);
+  expect(hubBuiltCount).toBeGreaterThan(0);
+
+  await context.close();
+});
+
+test('Test 20e: Branch B and hub panels', async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+  await waitForSettled(frame, 'overview');
+
+  await frame.locator('#node-piqGate').click();
+  await expect(frame.locator('#detailPanel')).toHaveClass(/open/);
+  await expect(frame.locator('#dpTag')).toContainText('Branch B');
+  await expect(frame.locator('#dpTag')).toContainText('of 10');
+
+  await frame.locator('#node-piqApollo').click();
+  await expect(frame.locator('#dpTag')).toContainText('In development');
+
+  await frame.locator('#node-trunk').click();
+  await expect(frame.locator('#dpMinorList')).toContainText('Report back required on every task');
+  await expect(frame.locator('#dpMinorList')).toContainText('Grey items are in development.');
   await context.close();
 });
 
@@ -830,6 +1006,48 @@ test('Prompt C: screenshots for human review', async ({ browser }) => {
 
   await focusOn(['radarOrch', 'collector', 'judge']);
   await page.screenshot({ path: path.join(outDir, '05-branch-c-detail-100.png') });
+
+  await context.close();
+});
+
+test('Prompt B: screenshots for human review', async ({ browser }) => {
+  const fs = require('fs');
+  const path = require('path');
+  const outDir = path.join(__dirname, '..', 'test-results', 'lgp-branch-b');
+  fs.mkdirSync(outDir, { recursive: true });
+
+  const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+  await waitForSettled(frame, 'overview');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(outDir, '01-overview-fit.png') });
+
+  await focusOnNodes(page, frame, ['piqBrief', 'piqDiscover', 'piqGate']);
+  await page.screenshot({ path: path.join(outDir, '02-branch-b-top-100.png') });
+
+  await focusOnNodes(page, frame, ['piqExtract', 'piqApollo', 'piqLinkedin', 'piqVault']);
+  await page.screenshot({ path: path.join(outDir, '03-branch-b-sides-100.png') });
+
+  await focusOnNodes(page, frame, ['piqDossier', 'piqWriter', 'piqSend']);
+  await page.screenshot({ path: path.join(outDir, '04-branch-b-bottom-100.png') });
+
+  await focusOnNodes(page, frame, ['piqSend']);
+  await frame.locator('#node-piqSend .auto-toggle').click();
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(outDir, '05-auto-send-on-100.png') });
+  await frame.locator('#node-piqSend .auto-toggle').click();
+
+  await frame.locator('body').press('0');
+  await page.waitForTimeout(200);
+  await frame.locator('#btnMinor').click();
+  await waitForSettled(frame, 'detail');
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: path.join(outDir, '06-detail-fit.png') });
+
+  await focusOnNodes(page, frame, ['trunk']);
+  await page.screenshot({ path: path.join(outDir, '07-hub-detail-100.png') });
 
   await context.close();
 });

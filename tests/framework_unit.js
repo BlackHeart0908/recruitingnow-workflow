@@ -91,6 +91,43 @@ const LGP_C_SPEC = { pattern: 'brain', hub: 'trunk',
   });
 }
 
+/* ---- 2d. LeadGenPro with Branch B (8-card vertical chain + two side lanes), heights from the Prompt B design session ---- */
+{
+  const LGP_B_HEIGHTS = Object.assign({}, LGP_C_HEIGHTS, {"trunk":{"overview":140,"detail":330},"piqBrief":{"overview":199,"detail":470},"piqDiscover":{"overview":199,"detail":500},"piqGate":{"overview":182,"detail":500},"piqExtract":{"overview":199,"detail":540},"piqApollo":{"overview":199,"detail":470},"piqDossier":{"overview":199,"detail":500},"piqWriter":{"overview":182,"detail":480},"piqSend":{"overview":230,"detail":540},"piqLinkedin":{"overview":199,"detail":470},"piqVault":{"overview":199,"detail":470}});
+  delete LGP_B_HEIGHTS.stubB;
+  const brA = LGP_C_SPEC.branches.find(function (b) { return b.id === 'A'; });
+  const brC = LGP_C_SPEC.branches.find(function (b) { return b.id === 'C'; });
+  const brB = { id: 'B', dir: 'down', chain: ['piqBrief', 'piqDiscover', 'piqGate', 'piqExtract', 'piqApollo', 'piqDossier', 'piqWriter', 'piqSend'],
+    forks: [{ at: 'piqExtract', lanes: [{ side: -1, chain: ['piqLinkedin'] }, { side: 1, chain: ['piqVault'] }] }] };
+  const LGP_B_SPEC = { pattern: 'brain', hub: 'trunk', branches: [brA, brC, brB], loops: LGP_C_SPEC.loops };
+  const cvB = WF.canvasFor(LGP_B_SPEC, LGP_B_HEIGHTS);
+  const cvRef = WF.canvasFor(LGP_C_SPEC, LGP_C_HEIGHTS);
+  check(cvB.shifts.A.dx === 0 && cvB.shifts.A.dy === 0 && cvB.shifts.C.dx === 0 && cvB.shifts.C.dy === 0, 'LGP B: branches A and C must not be shifted');
+  ['overview', 'detail'].forEach(function (m) {
+    const L = WF.layout(LGP_B_SPEC, LGP_B_HEIGHTS, m, { shifts: cvB.shifts });
+    const c = L.cards;
+    const v = WF.inspect(L, cvB);
+    check(v.length === 0, 'LGP B ' + m + ' violations: ' + JSON.stringify(v));
+    const R = WF.layout(LGP_C_SPEC, LGP_C_HEIGHTS, m, { shifts: cvRef.shifts }).cards;
+    ['prospector', 'crm', 'whatsapp', 'coach', 'radarOrch', 'judge', 'pattern', 'radarDb', 'projSend', 'recSend'].forEach(function (id) {
+      check(near(c[id].x, R[id].x) && near(c[id].y, R[id].y), 'LGP B ' + m + ' ' + id + ' moved from its Prompt C position');
+    });
+    brB.chain.forEach(function (id, i) {
+      check(near(c[id].x, -T.CARD_W / 2), 'LGP B ' + m + ' ' + id + ' must sit in the centre column');
+      if (i > 0) check(near(c[id].y - (c[brB.chain[i - 1]].y + c[brB.chain[i - 1]].h), T.GAP_CHAIN), 'LGP B ' + m + ' ' + id + ' chain gap must be GAP_CHAIN');
+    });
+    check(near(c.piqLinkedin.y, c.piqApollo.y) && near(c.piqVault.y, c.piqApollo.y), 'LGP B ' + m + ' side cards level with Apollo Enrichment');
+    check(c.piqLinkedin.x + T.CARD_W < c.piqApollo.x && c.piqVault.x > c.piqApollo.x + T.CARD_W, 'LGP B ' + m + ' LinkedIn Finder left, Vault right');
+    check(c.piqBrief.y > c.trunk.y + c.trunk.h + T.GAP_BRANCH, 'LGP B ' + m + ' Branch B pushed below the A and C lanes');
+    const byId = {}; L.pipes.forEach(function (p) { byId[p.id] = p; });
+    check(byId.trunk__piqBrief && byId.trunk__piqBrief.kind === 'trunk-branch', 'LGP B ' + m + ' hub pipe to Search Brief');
+    check(byId.piqExtract__piqApollo && byId.piqExtract__piqApollo.kind === 'main', 'LGP B ' + m + ' extract to apollo is main');
+    check(byId.piqExtract__piqLinkedin && byId.piqExtract__piqLinkedin.kind === 'sub' && byId.piqExtract__piqVault && byId.piqExtract__piqVault.kind === 'sub', 'LGP B ' + m + ' side pipes are sub');
+    check(near(byId.piqExtract__piqLinkedin.len, byId.piqExtract__piqVault.len, 2), 'LGP B ' + m + ' side fork pipes must be mirror images');
+    check(byId.pattern__radarOrch.kind === 'feedback' && byId.pattern__radarOrch.dots === 0 && byId.coach__crm.kind === 'feedback', 'LGP B ' + m + ' loops unchanged');
+  });
+}
+
 /* ---- 3. random brain specs, both modes ---- */
 function randomBrain(withLoops) {
   let n = 0; const H = {};
