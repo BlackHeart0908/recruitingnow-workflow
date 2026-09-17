@@ -10,7 +10,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  var VERSION = '2.1.0';
+  var VERSION = '2.2.0';
 
   var TOKENS = Object.freeze({
     CARD_W: 170,        // every normal card
@@ -223,11 +223,35 @@
     cards[spec.hub] = hub;
     var branchIds = {};
     spec.branches.forEach(function (br) {
+      if (br.flow === 'in' && br.forks && br.forks.length) {
+        throw new Error('WF: branch ' + br.id + ' has flow:"in" and forks (needs a design pass)');
+      }
+      var flowStart = flow.length;
       branchIds[br.id] = layoutBranch(br, hub, heights, mode, cards, flow);
+      if (br.flow === 'in') {
+        for (var fi = flowStart; fi < flow.length; fi++) {
+          var f = flow[fi], tmp = f.from; f.from = f.to; f.to = tmp;
+        }
+      }
       var s = shifts && shifts[br.id];
       if (s) shiftCards(branchIds[br.id], cards, s.dx, s.dy);
     });
-    flow.forEach(function (f) { if (f.from === '__hub__') f.from = spec.hub; });
+    flow.forEach(function (f) {
+      if (f.from === '__hub__') f.from = spec.hub;
+      if (f.to === '__hub__') f.to = spec.hub;
+    });
+    if (spec.loops) {
+      var branchFlowById = {};
+      spec.branches.forEach(function (br) { branchFlowById[br.id] = br.flow; });
+      spec.loops.forEach(function (lp) {
+        [lp.from, lp.to].forEach(function (id) {
+          var c = cards[id];
+          if (c && branchFlowById[c.branch] === 'in') {
+            throw new Error('WF: loop references card "' + id + '" on a flow:"in" branch ' + c.branch + ' (needs a design pass)');
+          }
+        });
+      });
+    }
     return { cards: cards, flow: flow, branchIds: branchIds, hub: hub };
   }
 

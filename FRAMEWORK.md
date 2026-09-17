@@ -1,6 +1,6 @@
 # Workflow Library Framework v2
 
-**Version:** 2.0.0 (designed and validated 2026-09-17)
+**Version:** 2.2.0 (designed and validated 2026-09-17, flow:'in' branches added 2026-09-18)
 **Code:** `public/framework/wf-framework-v2.js` (layout core + DOM runtime, one file, no dependencies)
 **Tests:** `tests/framework_unit.js` (Node) + the "Framework v2" tests in `tests/library_acceptance.spec.js` (browser)
 **Replaces:** Measurement Framework v1 (radial angles, shipped in Prompt B-Fix-2). v1 is retired.
@@ -141,6 +141,16 @@ var WF_SPEC = {
 - `side`: on `right`/`left` branches `-1` = above, `+1` = below. On `down`/`up` branches `-1` = left, `+1` = right.
 - Several lanes may sit on the same side. They stack outward in array order.
 - Pipe kinds are assigned automatically: hub to first card `trunk-branch`, along a chain `main`, fork to lane `sub`, along a lane `linear`, loop `feedback`.
+- `flow: 'in'` (2.2.0): a branch may declare its flow running INTO the hub instead of out of it.
+  ```js
+  { id: 'K', dir: 'left', flow: 'in', chain: ['organize', 'extract', 'intake'] }
+  ```
+  Card positions are computed exactly as any other branch (the chain still runs outward from the hub,
+  first chain entry nearest the hub) but every pipe on the branch points the other way: with the chain
+  above, the pipes are `intake -> extract`, `extract -> organize`, `organize -> hub`. Arrowheads and
+  moving dots follow the reversed pipe direction, so the eye reads the branch flowing toward the hub. A
+  `flow: 'in'` branch may not declare `forks`, and may not be named in any `loops` entry (`from` or `to`),
+  so the code throws rather than render untested geometry.
 
 ### Line
 
@@ -163,6 +173,7 @@ var WF_SPEC = {
 | Any number of lanes, either side, stacked | A loop that starts on an inner lane |
 | Loops on `right`/`left` branches from the OUTERMOST lane back to a main card at or before the fork | Loops on `up`/`down` branches |
 | One satellite above and any satellites below (Line) | Branches that cannot be cleared from each other |
+| A branch whose flow runs into the hub (`flow: 'in'`) | A `flow: 'in'` branch with forks or loops |
 
 The errors are deliberate. They stop a sloppy layout from ever rendering.
 
@@ -221,6 +232,7 @@ The hub centre is the origin (0, 0). y grows downward.
 - **Loops are orthogonal, like a metro line:** straight out of the lane card, a 24-unit rounded corner, straight across `GAP_LOOP` beyond every card of the branch in that span, a corner, then straight into the target card. Upper lanes loop above, lower lanes loop below. Clearance is guaranteed by construction.
 - **Classes and markers:** every pipe is `<g class="pipe pipe-KIND" data-type="KIND" data-id="FROM__TO">` with one `<path>`. Arrowheads: `url(#mArrowMain)` on every kind except `feedback` (`url(#mArrowOk)`) and `control` (none).
 - **Coordinates:** all pipes live inside one `<g id="wfPipes" transform="translate(originX,originY)">`, so pipe maths stays in origin-centred units.
+- **Reversed branches (2.2.0):** a `flow: 'in'` branch swaps each of its pipes' `from`/`to` ends after normal placement, so arrowheads and dots run toward the hub. The geometry (port sides, curve handles, card positions) is unchanged, since `buildPipe` derives everything from the two cards' real positions, not from which end started the flow.
 
 ---
 
@@ -320,9 +332,10 @@ Card width is `WF.TOKENS.HUB_W` for the hub or satellite `above`, the satellite'
 
 ## 13. Versioning and caching
 
-- The page loads `../framework/wf-framework-v2.js?v=2.1.0`. A bug-fix release bumps the query string (2.0.1) so browsers fetch the new file.
+- The page loads `../framework/wf-framework-v2.js?v=2.2.0`. A bug-fix release bumps the query string (2.0.1) so browsers fetch the new file.
 - A change that would move any existing card is a breaking change: create `wf-framework-v3.js`, keep v2 in place for pages not yet moved, and add a migration prompt.
 - 2.1.0 moved cards on purpose: it was released together with the only page on v2 (LeadGenPro), which was the page being fixed. Any future card-moving change with more than one page on v2 still needs wf-framework-v3.js.
+- 2.2.0 (`flow: 'in'` branches) moves no card on any existing page (LeadGenPro, Account Enrichment): it only reverses which end of a pipe is `from` and which is `to` on branches that opt in, so no `wf-framework-v3.js` is needed for this release.
 - The file must stay free of client names (it is publicly served).
 
 ---

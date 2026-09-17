@@ -14,7 +14,7 @@ function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 
 function ri(a, b) { return a + Math.floor(rnd() * (b - a + 1)); }
 
 /* ---- 1. version + tokens ---- */
-check(WF.VERSION === '2.1.0', 'VERSION must be 2.1.0');
+check(WF.VERSION === '2.2.0', 'VERSION must be 2.2.0');
 check(Object.isFrozen(T), 'TOKENS must be frozen');
 check(T.CARD_W === 170 && T.HUB_W === 340 && T.GAP_CHAIN === 72 && T.GAP_BRANCH === 90 && T.GAP_LOOP === 45 && T.GAP_SECTOR === 120, 'tier values changed');
 check(WF.dotCount(72) === 4 && WF.dotCount(10) === T.DOT_MIN && WF.dotCount(5000) === T.DOT_MAX, 'dotCount formula');
@@ -246,6 +246,98 @@ check(lineBad === 0, 'random line layouts with violations: ' + lineBad + ' of ' 
   L.cards.analyzer.x = L.cards.coldcall.x + 20;     // force an overlap
   const v = WF.inspect(L, cv);
   check(v.some(function (x) { return x.code === 'V1_CARD_GAP'; }), 'inspector must catch a forced overlap');
+}
+
+/* ---- 7. flow:'in' branches (framework 2.2.0) ---- */
+
+/* 7a. flow:'in' moves no card and does not change the canvas */
+{
+  const FH = { hub: { overview: 120, detail: 160 }, i1: { overview: 150, detail: 300 }, i2: { overview: 150, detail: 300 }, i3: { overview: 150, detail: 300 } };
+  const specOut = { pattern: 'brain', hub: 'hub', branches: [{ id: 'K', dir: 'left', chain: ['i3', 'i2', 'i1'] }] };
+  const specIn = { pattern: 'brain', hub: 'hub', branches: [{ id: 'K', dir: 'left', flow: 'in', chain: ['i3', 'i2', 'i1'] }] };
+  const cvOut = WF.canvasFor(specOut, FH), cvIn = WF.canvasFor(specIn, FH);
+  check(cvOut.w === cvIn.w && cvOut.h === cvIn.h && cvOut.originX === cvIn.originX && cvOut.originY === cvIn.originY, '7a: flow:in must not change canvas');
+  ['overview', 'detail'].forEach(function (m) {
+    const Lout = WF.layout(specOut, FH, m, { shifts: cvOut.shifts });
+    const Lin = WF.layout(specIn, FH, m, { shifts: cvIn.shifts });
+    check(JSON.stringify(Lout.cards) === JSON.stringify(Lin.cards), '7a: flow:in must not move any card in ' + m);
+  });
+}
+
+/* The section 5.1 RAG assistant spec, used for 7b/7c below */
+const RAG_SPEC = {
+  pattern: 'brain', hub: 'kb',
+  branches: [
+    { id: 'K', dir: 'left', flow: 'in', chain: ['organize', 'extract', 'intake'] },
+    { id: 'Q', dir: 'up', flow: 'in', chain: ['narrow', 'ask'] },
+    { id: 'A', dir: 'right', chain: ['team'],
+      forks: [{ at: 'team', lanes: [
+        { side: -1, chain: ['quick'] },
+        { side: -1, chain: ['deep'] },
+        { side: 1, chain: ['compare', 'shortlist'] }
+      ] }] }
+  ]
+};
+const RAG_IDS = ['kb', 'intake', 'extract', 'organize', 'ask', 'narrow', 'team', 'quick', 'deep', 'compare', 'shortlist'];
+const RAG_HEIGHTS = { kb: { overview: 200, detail: 260 }, intake: { overview: 190, detail: 400 }, extract: { overview: 190, detail: 420 },
+  organize: { overview: 190, detail: 410 }, ask: { overview: 182, detail: 380 }, narrow: { overview: 190, detail: 400 },
+  team: { overview: 190, detail: 400 }, quick: { overview: 182, detail: 340 }, deep: { overview: 182, detail: 360 },
+  compare: { overview: 182, detail: 360 }, shortlist: { overview: 182, detail: 360 } };
+
+/* 7b. pipes on flow:'in' branches are reversed */
+{
+  const cv7 = WF.canvasFor(RAG_SPEC, RAG_HEIGHTS);
+  ['overview', 'detail'].forEach(function (m) {
+    const L = WF.layout(RAG_SPEC, RAG_HEIGHTS, m, { shifts: cv7.shifts });
+    const ids = L.pipes.map(function (p) { return p.id; });
+    ['intake__extract', 'extract__organize', 'organize__kb', 'ask__narrow', 'narrow__kb'].forEach(function (id) {
+      check(ids.indexOf(id) >= 0, '7b: reversed pipe ' + id + ' must exist in ' + m);
+    });
+    ['kb__organize', 'kb__narrow', 'organize__extract', 'narrow__ask'].forEach(function (id) {
+      check(ids.indexOf(id) < 0, '7b: forward pipe ' + id + ' must not exist in ' + m);
+    });
+  });
+}
+
+/* 7c. the RAG spec is clean: fixed heights, then >= 200 random height sets in both modes */
+{
+  const cv7 = WF.canvasFor(RAG_SPEC, RAG_HEIGHTS);
+  ['overview', 'detail'].forEach(function (m) {
+    const v = WF.inspect(WF.layout(RAG_SPEC, RAG_HEIGHTS, m, { shifts: cv7.shifts }), cv7);
+    check(v.length === 0, '7c: RAG spec fixed-heights ' + m + ' violations: ' + JSON.stringify(v));
+  });
+  let ragRuns = 0, ragBad = 0;
+  for (let t = 0; t < 200; t++) {
+    const H = {};
+    RAG_IDS.forEach(function (id) {
+      const ov = ri(150, 240), dt = ov + ri(180, 440);
+      H[id] = { overview: ov, detail: dt };
+    });
+    const c = WF.canvasFor(RAG_SPEC, H);
+    ['overview', 'detail'].forEach(function (m) {
+      ragRuns++;
+      const v = WF.inspect(WF.layout(RAG_SPEC, H, m, { shifts: c.shifts }), c);
+      if (v.length) { ragBad++; if (ragBad <= 3) failures.push('7c: random RAG heights ' + m + ': ' + JSON.stringify(v.slice(0, 2))); }
+    });
+  }
+  check(ragBad === 0, '7c: random RAG height sets with violations: ' + ragBad + ' of ' + ragRuns);
+}
+
+/* 7d. refusals: flow:'in' + forks, and a loop naming a card on a flow:'in' branch */
+{
+  const FH = { hub: { overview: 120, detail: 160 }, i1: { overview: 150, detail: 300 }, i2: { overview: 150, detail: 300 } };
+  const specForkIn = { pattern: 'brain', hub: 'hub', branches: [{ id: 'K', dir: 'left', flow: 'in', chain: ['i2', 'i1'],
+    forks: [{ at: 'i1', lanes: [{ side: -1, chain: ['i2'] }] }] }] };
+  let threw = false;
+  try { WF.canvasFor(specForkIn, FH); } catch (e) { threw = true; }
+  check(threw, '7d: a flow:in branch with forks must throw');
+
+  const specLoopIn = { pattern: 'brain', hub: 'hub',
+    branches: [{ id: 'K', dir: 'left', flow: 'in', chain: ['i2', 'i1'] }],
+    loops: [{ from: 'i2', to: 'i1' }] };
+  threw = false;
+  try { WF.canvasFor(specLoopIn, FH); } catch (e) { threw = true; }
+  check(threw, '7d: a loop naming a card on a flow:in branch must throw');
 }
 
 if (failures.length) {
