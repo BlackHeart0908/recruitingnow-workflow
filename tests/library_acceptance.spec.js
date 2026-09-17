@@ -764,7 +764,7 @@ test('Framework v2: Overview inspector clean', async ({ browser }) => {
   const { frame } = await waitForFrameLoad(page);
 
   const rep = await waitForSettled(frame, 'overview');
-  expect(rep.framework).toBe('2.2.0');
+  expect(rep.framework).toBe('2.3.0');
   expect(rep.violations).toEqual([]);
   expect(rep.ok).toBe(true);
   await context.close();
@@ -1124,11 +1124,12 @@ test('Prompt B: screenshots for human review', async ({ browser }) => {
 });
 
 /* ---------------------------------------------------------------------------
-   RAG assistant workflow (framework 2.2.0: flow:'in' branches, a new page).
+   RAG assistant workflow (framework 2.2.0: flow:'in' branches; 2.3.0: the
+   return pipe from Research Team back to The User).
    --------------------------------------------------------------------------- */
 
 test.describe('RAG assistant', function () {
-  const RAG_IDS = ['kb', 'intake', 'extract', 'organize', 'ask', 'narrow', 'team', 'quick', 'deep', 'compare', 'shortlist'];
+  const RAG_IDS = ['kb', 'intake', 'extract', 'organize', 'user', 'narrow', 'team', 'quick', 'deep', 'compare', 'shortlist'];
 
   test('loads with zero console errors and zero failed responses', async ({ browser }) => {
     const context = await browser.newContext();
@@ -1178,7 +1179,7 @@ test.describe('RAG assistant', function () {
     const { frame } = await waitForFrameLoad(page);
 
     const repOverview = await waitForSettled(frame, 'overview');
-    expect(repOverview.framework).toBe('2.2.0');
+    expect(repOverview.framework).toBe('2.3.0');
     expect(repOverview.ok).toBe(true);
     expect(repOverview.violations).toEqual([]);
 
@@ -1196,14 +1197,39 @@ test.describe('RAG assistant', function () {
     const { frame } = await waitForFrameLoad(page);
     await waitForSettled(frame, 'overview');
 
-    const reversed = ['intake__extract', 'extract__organize', 'organize__kb', 'ask__narrow', 'narrow__kb'];
+    const reversed = ['intake__extract', 'extract__organize', 'organize__kb', 'user__narrow', 'narrow__kb'];
     for (const id of reversed) {
       await expect(frame.locator('[data-id="' + id + '"]')).toHaveCount(1);
     }
-    const forward = ['kb__organize', 'kb__narrow', 'organize__extract', 'narrow__ask'];
+    const forward = ['kb__organize', 'kb__narrow', 'organize__extract', 'narrow__user'];
     for (const id of forward) {
       await expect(frame.locator('[data-id="' + id + '"]')).toHaveCount(0);
     }
+    await context.close();
+  });
+
+  test('the return pipe from Research Team to The User exists, carries moving dots', async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.goto(BASE_URL + '#rag-assistant');
+    const { frame } = await waitForFrameLoad(page);
+    await waitForSettled(frame, 'overview');
+
+    const returnPipe = frame.locator('[data-id="team__user"]');
+    await expect(returnPipe).toHaveCount(1);
+    await expect(returnPipe).toHaveAttribute('data-type', 'return');
+
+    const dotCount = await returnPipe.locator('.particle').count();
+    expect(dotCount).toBeGreaterThanOrEqual(2);
+
+    const firstPositions = await returnPipe.locator('.particle').evaluateAll(function (els) {
+      return els.map(function (el) { return el.getAttribute('cx') + ',' + el.getAttribute('cy'); });
+    });
+    await page.waitForTimeout(1000);
+    const secondPositions = await returnPipe.locator('.particle').evaluateAll(function (els) {
+      return els.map(function (el) { return el.getAttribute('cx') + ',' + el.getAttribute('cy'); });
+    });
+    expect(secondPositions).not.toEqual(firstPositions);
     await context.close();
   });
 
@@ -1219,6 +1245,24 @@ test.describe('RAG assistant', function () {
     await expect(frame.locator('#dpTitle')).toHaveText('Research Team');
     const liCount = await frame.locator('#dpMinorList li').count();
     expect(liCount).toBeGreaterThanOrEqual(2);
+    await context.close();
+  });
+
+  test('The User card is present, The Question is gone', async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.goto(BASE_URL + '#rag-assistant');
+    const { frame } = await waitForFrameLoad(page);
+    await waitForSettled(frame, 'overview');
+
+    await expect(frame.locator('#node-user .node-title')).toHaveText('The User');
+    await expect(frame.locator('#node-user')).toContainText('Asks in plain English, gets the answer back');
+
+    const bodyText = await frame.locator('body').innerText();
+    expect(bodyText).not.toContain('The Question');
+
+    await frame.locator('#node-user').click();
+    await expect(frame.locator('#dpTitle')).toHaveText('The User');
     await context.close();
   });
 
@@ -1271,7 +1315,7 @@ test.describe('RAG assistant', function () {
       window.alert = function () { window.__alertCalls++; };
     });
 
-    await frame.locator('#node-ask').click();
+    await frame.locator('#node-user').click();
     await frame.locator('#dpClose').click();
     await frame.locator('#btnMinor').click();
     await page.waitForTimeout(400);

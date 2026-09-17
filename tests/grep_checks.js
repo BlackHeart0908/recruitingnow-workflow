@@ -246,7 +246,7 @@ checkNoStrings(
   'atFit',
   'function contentFitZoom',
   'DEFAULT_ZOOM = 0.32',
-  'wf-framework-v2.js?v=2.2.0'
+  'wf-framework-v2.js?v=2.3.0'
 ].forEach(function (pattern) {
   checkMinHits('public/workflows/leadgenpro.html', pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 1, 'Check W');
 });
@@ -298,8 +298,8 @@ checkMinHits('public/workflows/leadgenpro.html', 'Overview vs Full Detail split 
     return;
   }
   const content = readFile(rel);
-  if (content.indexOf("VERSION = '2.2.0'") === -1) {
-    failures.push('Check Q: ' + rel + " does not declare VERSION = '2.2.0'");
+  if (content.indexOf("VERSION = '2.3.0'") === -1) {
+    failures.push('Check Q: ' + rel + " does not declare VERSION = '2.3.0'");
   }
   if (content.indexOf('function mount(') === -1) {
     failures.push('Check Q: ' + rel + ' does not define the DOM runtime function mount(');
@@ -372,12 +372,17 @@ checkNoPatterns(
 [
   'WF_SPEC',
   'WF\\.mount\\(',
-  'wf-framework-v2\\.js\\?v=2\\.2\\.0',
+  'wf-framework-v2\\.js\\?v=2\\.3\\.0',
   'wf-menu-btn',
   'Illustrative scale, not live data\\.'
 ].forEach(function (pattern) {
   checkMinHits('public/workflows/rag-assistant.html', pattern, 1, 'Check X');
 });
+
+/* Check X2: the return pipe, from Research Team to The User */
+checkMinHits('public/workflows/rag-assistant.html', "returns\\s*:\\s*\\[\\{\\s*from\\s*:\\s*'team'\\s*,\\s*to\\s*:\\s*'user'\\s*\\}\\]", 1, 'Check X2');
+checkMinHits('public/workflows/rag-assistant.html', "title\\s*:\\s*'The User'", 1, 'Check X2');
+checkNoStrings('public/workflows/rag-assistant.html', ['The Question'], 'Check X2');
 
 /* Check Y: public-wording forbidden strings, in every file this build adds or touches
    under public/ (case insensitive) -- the new page and workflows.json -- except the
@@ -418,7 +423,7 @@ checkNoPatterns(
 (function checkRagNodeCompleteness() {
   var rel = 'public/workflows/rag-assistant.html';
   var content = readFile(rel);
-  var ids = ['kb', 'intake', 'extract', 'organize', 'ask', 'narrow', 'team', 'quick', 'deep', 'compare', 'shortlist'];
+  var ids = ['kb', 'intake', 'extract', 'organize', 'user', 'narrow', 'team', 'quick', 'deep', 'compare', 'shortlist'];
   // Locate every node's own start first (a node's own top-level "id:" declaration, not a
   // counter's "id:" field nested inside it), then slice between consecutive known starts --
   // slicing to the next generic "{ ... id:" would stop at the node's own first counter object.
@@ -464,21 +469,21 @@ checkNoPatterns(
   }
 })();
 
-/* Check AB: framework version 2.2.0, and every page under public/workflows/ that loads the
-   framework requests ?v=2.2.0 */
+/* Check AB: framework version 2.3.0, and every page under public/workflows/ that loads the
+   framework requests ?v=2.3.0 */
 (function checkFrameworkVersion() {
   var rel = 'public/framework/wf-framework-v2.js';
   var content = readFile(rel);
-  if (content.indexOf("VERSION = '2.2.0'") === -1) {
-    failures.push('Check AB: ' + rel + " does not declare VERSION = '2.2.0'");
+  if (content.indexOf("VERSION = '2.3.0'") === -1) {
+    failures.push('Check AB: ' + rel + " does not declare VERSION = '2.3.0'");
   }
   var dir = path.join(ROOT, 'public', 'workflows');
   fs.readdirSync(dir).filter(function (f) { return f.endsWith('.html'); }).forEach(function (f) {
     var relPage = 'public/workflows/' + f;
     var pageContent = readFile(relPage);
     if (pageContent.indexOf('wf-framework-v2.js') === -1) return; // page does not load the framework
-    if (pageContent.indexOf('wf-framework-v2.js?v=2.2.0') === -1) {
-      failures.push('Check AB: ' + relPage + ' loads the framework without requesting ?v=2.2.0');
+    if (pageContent.indexOf('wf-framework-v2.js?v=2.3.0') === -1) {
+      failures.push('Check AB: ' + relPage + ' loads the framework without requesting ?v=2.3.0');
     }
   });
 })();

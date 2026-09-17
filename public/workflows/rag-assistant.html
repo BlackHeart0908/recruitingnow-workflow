@@ -99,6 +99,7 @@ body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;colo
 .pipe-trunk-branch path{stroke-width:2.4;opacity:.65;}
 .pipe-sub path{stroke-width:1.6;opacity:.5;}
 .pipe-feedback path{stroke:var(--ok);stroke-dasharray:7 7;opacity:.8;}
+.pipe-return path{stroke:var(--accent);stroke-width:2;opacity:1;}
 .pipe .particle{fill:var(--accent-lt);filter:drop-shadow(0 0 2.5px var(--accent-glow));}
 .arrow-fill-main{fill:var(--accent-dim);}
 .arrow-fill-ok{fill:var(--ok);}
@@ -203,7 +204,7 @@ body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;colo
 
 <div class="footer">Illustrative scale, not live data.</div>
 
-<script src="../framework/wf-framework-v2.js?v=2.2.0"></script>
+<script src="../framework/wf-framework-v2.js?v=2.3.0"></script>
 <script>
 (function(){
 'use strict';
@@ -295,20 +296,22 @@ var NODES = [
     }
   },
   {
-    id:'ask', kind:'node', branchId:'Q',
-    title:'The Question', subtitle:'Asked in plain English',
+    id:'user', kind:'node', branchId:'Q',
+    title:'The User', subtitle:'Asks in plain English, gets the answer back',
     counters:[
       { id:'asked', label:'Questions today', type:'gauge', mean:64, min:40, max:90, vol:6, fmt:'int' },
       { id:'answer', label:'Typical answer', type:'fixed', value:'under 30 s', fmt:'text' }
     ],
     minor:[
-      'A loan officer types the borrower situation the way they would say it out loud',
+      'A loan officer with a client on the phone, not an analyst',
+      'Types the borrower situation the way they would say it out loud',
       'Example: self-employed, 695 credit score, rural non-warrantable condo, bank statement program, 800,000 loan',
+      'The ranked answer comes back to the same person who asked, in under 30 seconds',
       'No forms, no filters, no training needed'
     ],
     tooltip:{
-      what:'The way a real question arrives: a borrower scenario in plain words, not a search query.',
-      why:'The people who need the answer are loan officers on the phone with a client, not analysts. If it needs training, it does not get used.'
+      what:'The person the system exists for. The question goes in from here in plain words, and the finished answer comes back to the same place.',
+      why:'The people who need these answers are loan officers mid call, not analysts. If it needs training or a query language, it does not get used.'
     }
   },
   {
@@ -339,7 +342,8 @@ var NODES = [
       'Every answer is built from the actual guideline wording, never from memory',
       'Works through conditions, exceptions and cross-references the way an experienced underwriter would',
       'Answers in plain English instead of handing back paragraphs to read',
-      'Measured against 107 real qualification questions, 83%+ correct'
+      'Measured against 107 real qualification questions, 83%+ correct',
+      'Hands the finished answer back to the person who asked'
     ],
     tooltip:{
       what:'The answering layer. Three assistants, each built for a different shape of question, all working off the same rule library.',
@@ -421,14 +425,15 @@ var WF_SPEC = {
      with real card heights no branch moves, so this order is stable. */
   branches: [
     { id: 'K', dir: 'left', flow: 'in', chain: ['organize', 'extract', 'intake'] },
-    { id: 'Q', dir: 'up', flow: 'in', chain: ['narrow', 'ask'] },
+    { id: 'Q', dir: 'up', flow: 'in', chain: ['narrow', 'user'] },
     { id: 'A', dir: 'right', chain: ['team'],
       forks: [{ at: 'team', lanes: [
         { side: -1, chain: ['quick'] },
         { side: -1, chain: ['deep'] },
         { side: 1, chain: ['compare', 'shortlist'] }
       ] }] }
-  ]
+  ],
+  returns: [{ from: 'team', to: 'user' }]
 };
 var rt = null;
 
