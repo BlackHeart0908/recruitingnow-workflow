@@ -246,7 +246,7 @@ checkNoStrings(
   'atFit',
   'function contentFitZoom',
   'DEFAULT_ZOOM = 0.32',
-  'wf-framework-v2.js?v=2.1.0'
+  'wf-framework-v2.js?v=2.2.0'
 ].forEach(function (pattern) {
   checkMinHits('public/workflows/leadgenpro.html', pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 1, 'Check W');
 });
@@ -298,8 +298,8 @@ checkMinHits('public/workflows/leadgenpro.html', 'Overview vs Full Detail split 
     return;
   }
   const content = readFile(rel);
-  if (content.indexOf("VERSION = '2.1.0'") === -1) {
-    failures.push('Check Q: ' + rel + " does not declare VERSION = '2.1.0'");
+  if (content.indexOf("VERSION = '2.2.0'") === -1) {
+    failures.push('Check Q: ' + rel + " does not declare VERSION = '2.2.0'");
   }
   if (content.indexOf('function mount(') === -1) {
     failures.push('Check Q: ' + rel + ' does not define the DOM runtime function mount(');
@@ -364,6 +364,133 @@ checkNoPatterns(
   ['RecruitingNOW', 'Andreas', 'Bavaria', 'Germany'].forEach(function (s) {
     if (content.indexOf(s) !== -1) {
       failures.push('Check S: found "' + s + '" in ' + rel);
+    }
+  });
+})();
+
+/* Check X: RAG assistant file exists and carries its core symbols */
+[
+  'WF_SPEC',
+  'WF\\.mount\\(',
+  'wf-framework-v2\\.js\\?v=2\\.2\\.0',
+  'wf-menu-btn',
+  'Illustrative scale, not live data\\.'
+].forEach(function (pattern) {
+  checkMinHits('public/workflows/rag-assistant.html', pattern, 1, 'Check X');
+});
+
+/* Check Y: public-wording forbidden strings, in every file this build adds or touches
+   under public/ (case insensitive) -- the new page and workflows.json -- except the
+   allowed "RAG" tag/subtitle in workflows.json. Pre-existing pages this build must not
+   edit (leadgenpro.html, account-enrichment.html, home.html; ground rule 1) are out of
+   scope for this check: leadgenpro.html already carries legitimate "LLM"/"GPT" copy from
+   an earlier build, and rule 1 forbids touching it here. Also: no em dash and no
+   wildcard postMessage target in the new page. */
+(function checkPublicWordingForbidden() {
+  var forbidden = [
+    'LendIQ', 'LendingIQ', 'Lending IQ', 'lendingiq', 'Sanskar', 'Supabase', 'pgvector',
+    'Vercel', 'Anthropic', 'Claude', 'OpenAI', 'GPT', 'embedding', 'embeddings',
+    'vector database', 'LLM', 'RAG pipeline', 'chunking', 'reranker'
+  ];
+  ['public/workflows/rag-assistant.html', 'public/workflows.json'].forEach(function (rel) {
+    var content = readFile(rel);
+    forbidden.forEach(function (s) {
+      var re = new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      if (re.test(content)) {
+        failures.push('Check Y: forbidden string "' + s + '" found in ' + rel);
+      }
+    });
+  });
+
+  var relNew = 'public/workflows/rag-assistant.html';
+  var contentNew = readFile(relNew);
+  if (contentNew.indexOf(EM_DASH) !== -1) {
+    var idx = contentNew.indexOf(EM_DASH);
+    var line = contentNew.substring(0, idx).split('\n').length;
+    failures.push('Check Y: em dash (U+2014) found in ' + relNew + ' near line ' + line);
+  }
+  if (/postMessage\(.*,\s*['"]\*['"]/.test(contentNew)) {
+    failures.push('Check Y: wildcard postMessage target found in ' + relNew);
+  }
+})();
+
+/* Check Z: RAG assistant node completeness -- every node id, title, tooltip {what,why}, >=2 minor entries */
+(function checkRagNodeCompleteness() {
+  var rel = 'public/workflows/rag-assistant.html';
+  var content = readFile(rel);
+  var ids = ['kb', 'intake', 'extract', 'organize', 'ask', 'narrow', 'team', 'quick', 'deep', 'compare', 'shortlist'];
+  // Locate every node's own start first (a node's own top-level "id:" declaration, not a
+  // counter's "id:" field nested inside it), then slice between consecutive known starts --
+  // slicing to the next generic "{ ... id:" would stop at the node's own first counter object.
+  var starts = ids.map(function (id) {
+    var m = new RegExp("\\{\\s*\\n?\\s*id\\s*:\\s*'" + id + "'").exec(content);
+    return { id: id, index: m ? m.index : -1 };
+  });
+  starts.sort(function (a, b) { return a.index - b.index; });
+  starts.forEach(function (entry, i) {
+    var id = entry.id;
+    if (entry.index === -1) { failures.push('Check Z: node "' + id + '" not found in ' + rel); return; }
+    var end = (i + 1 < starts.length) ? starts[i + 1].index : content.length;
+    var slice = content.substring(entry.index, end);
+    if (!/title\s*:\s*'[^']+'/.test(slice)) failures.push('Check Z: node "' + id + '" missing a title');
+    if (!/tooltip\s*:\s*\{[\s\S]*?what\s*:/.test(slice)) failures.push('Check Z: node "' + id + '" missing tooltip.what');
+    if (!/tooltip\s*:\s*\{[\s\S]*?why\s*:/.test(slice)) failures.push('Check Z: node "' + id + '" missing tooltip.why');
+    var minorMatch = /minor\s*:\s*\[([\s\S]*?)\]/.exec(slice);
+    if (!minorMatch) {
+      failures.push('Check Z: node "' + id + '" missing minor list');
+    } else {
+      var items = minorMatch[1].split(/',\s*\n?\s*'/).filter(function (s) { return s.trim().length; });
+      if (items.length < 2) failures.push('Check Z: node "' + id + '" has fewer than 2 minor entries');
+    }
+  });
+})();
+
+/* Check AA: registry entry for rag-assistant */
+(function checkRagRegistryEntry() {
+  var json = JSON.parse(readFile('public/workflows.json'));
+  var entry = json.filter(function (e) { return e.id === 'rag-assistant'; })[0];
+  if (!entry) {
+    failures.push('Check AA: rag-assistant entry missing from workflows.json');
+    return;
+  }
+  if (entry.title !== 'AI Guideline Research Assistant') {
+    failures.push('Check AA: title mismatch, expected "AI Guideline Research Assistant", got "' + entry.title + '"');
+  }
+  if (entry.accent !== '#0EA5E9') {
+    failures.push('Check AA: accent mismatch, expected "#0EA5E9", got "' + entry.accent + '"');
+  }
+  if (entry.file !== 'workflows/rag-assistant.html') {
+    failures.push('Check AA: file mismatch, expected "workflows/rag-assistant.html", got "' + entry.file + '"');
+  }
+})();
+
+/* Check AB: framework version 2.2.0, and every page under public/workflows/ that loads the
+   framework requests ?v=2.2.0 */
+(function checkFrameworkVersion() {
+  var rel = 'public/framework/wf-framework-v2.js';
+  var content = readFile(rel);
+  if (content.indexOf("VERSION = '2.2.0'") === -1) {
+    failures.push('Check AB: ' + rel + " does not declare VERSION = '2.2.0'");
+  }
+  var dir = path.join(ROOT, 'public', 'workflows');
+  fs.readdirSync(dir).filter(function (f) { return f.endsWith('.html'); }).forEach(function (f) {
+    var relPage = 'public/workflows/' + f;
+    var pageContent = readFile(relPage);
+    if (pageContent.indexOf('wf-framework-v2.js') === -1) return; // page does not load the framework
+    if (pageContent.indexOf('wf-framework-v2.js?v=2.2.0') === -1) {
+      failures.push('Check AB: ' + relPage + ' loads the framework without requesting ?v=2.2.0');
+    }
+  });
+})();
+
+/* Check AC: no LeadGenPro leftovers in the RAG assistant page (case insensitive) */
+(function checkRagNoLeadgenproLeftovers() {
+  var rel = 'public/workflows/rag-assistant.html';
+  var content = readFile(rel);
+  ['leadgenpro', 'prospect', 'radar', 'whatsapp', 'crm', 'apollo'].forEach(function (s) {
+    var re = new RegExp(s, 'i');
+    if (re.test(content)) {
+      failures.push('Check AC: leftover "' + s + '" found in ' + rel);
     }
   });
 })();

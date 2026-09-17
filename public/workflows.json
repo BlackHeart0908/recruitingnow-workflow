@@ -18,6 +18,15 @@
     "tags": ["Live system", "Multi-channel", "Solo build"]
   },
   {
+    "id": "rag-assistant",
+    "title": "AI Guideline Research Assistant",
+    "subtitle": "RAG assistant over 232 lender rulebooks, built for non-traditional lending",
+    "client": "Team build, white label delivery",
+    "file": "workflows/rag-assistant.html",
+    "accent": "#0EA5E9",
+    "tags": ["Live system", "RAG", "Team build"]
+  },
+  {
     "id": "account-enrichment",
     "title": "Account Enrichment Engine",
     "subtitle": "Salesforce enrichment pipeline",

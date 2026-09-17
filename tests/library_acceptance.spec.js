@@ -764,7 +764,7 @@ test('Framework v2: Overview inspector clean', async ({ browser }) => {
   const { frame } = await waitForFrameLoad(page);
 
   const rep = await waitForSettled(frame, 'overview');
-  expect(rep.framework).toBe('2.1.0');
+  expect(rep.framework).toBe('2.2.0');
   expect(rep.violations).toEqual([]);
   expect(rep.ok).toBe(true);
   await context.close();
@@ -1121,4 +1121,209 @@ test('Prompt B: screenshots for human review', async ({ browser }) => {
   await page.screenshot({ path: path.join(outDir, '08-hub-to-brief-100.png') });
 
   await context.close();
+});
+
+/* ---------------------------------------------------------------------------
+   RAG assistant workflow (framework 2.2.0: flow:'in' branches, a new page).
+   --------------------------------------------------------------------------- */
+
+test.describe('RAG assistant', function () {
+  const RAG_IDS = ['kb', 'intake', 'extract', 'organize', 'ask', 'narrow', 'team', 'quick', 'deep', 'compare', 'shortlist'];
+
+  test('loads with zero console errors and zero failed responses', async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    const pageErrors = [];
+    const consoleErrors = [];
+    const failedResponses = [];
+    page.on('pageerror', function (err) { pageErrors.push(String(err)); });
+    page.on('console', function (msg) { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
+    page.on('requestfailed', function (req) { failedResponses.push(req.url()); });
+    page.on('response', function (res) { if (res.status() >= 400) failedResponses.push(res.url() + ' -> ' + res.status()); });
+
+    await page.goto(BASE_URL + '#rag-assistant');
+    await waitForFrameLoad(page);
+    await page.waitForTimeout(1500);
+
+    expect(pageErrors).toEqual([]);
+    expect(consoleErrors).toEqual([]);
+    expect(failedResponses).toEqual([]);
+    await context.close();
+  });
+
+  test('all 11 cards render with expected data-id values and widths', async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.goto(BASE_URL + '#rag-assistant');
+    const { frame } = await waitForFrameLoad(page);
+    await waitForSettled(frame, 'overview');
+
+    for (const id of RAG_IDS) {
+      await expect(frame.locator('.node[data-id="' + id + '"]')).toHaveCount(1);
+    }
+    // canvasRect divides out the current zoom scale; a raw boundingBox() would measure
+    // on-screen pixels at whatever zoom the default view landed on, not canvas units.
+    const hub = await canvasRect(frame, 'kb');
+    const other = await canvasRect(frame, 'team');
+    near(hub.w, 340, 2);   // HUB_W
+    near(other.w, 170, 2); // CARD_W
+    await context.close();
+  });
+
+  test('layout report is clean in Overview and after switching to Full detail', async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.goto(BASE_URL + '#rag-assistant');
+    const { frame } = await waitForFrameLoad(page);
+
+    const repOverview = await waitForSettled(frame, 'overview');
+    expect(repOverview.framework).toBe('2.2.0');
+    expect(repOverview.ok).toBe(true);
+    expect(repOverview.violations).toEqual([]);
+
+    await frame.locator('#btnMinor').click();
+    const repDetail = await waitForSettled(frame, 'detail');
+    expect(repDetail.ok).toBe(true);
+    expect(repDetail.violations).toEqual([]);
+    await context.close();
+  });
+
+  test('reversed pipes exist in the DOM, forward-direction ids do not', async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.goto(BASE_URL + '#rag-assistant');
+    const { frame } = await waitForFrameLoad(page);
+    await waitForSettled(frame, 'overview');
+
+    const reversed = ['intake__extract', 'extract__organize', 'organize__kb', 'ask__narrow', 'narrow__kb'];
+    for (const id of reversed) {
+      await expect(frame.locator('[data-id="' + id + '"]')).toHaveCount(1);
+    }
+    const forward = ['kb__organize', 'kb__narrow', 'organize__extract', 'narrow__ask'];
+    for (const id of forward) {
+      await expect(frame.locator('[data-id="' + id + '"]')).toHaveCount(0);
+    }
+    await context.close();
+  });
+
+  test('clicking a card opens the detail panel and shows its sub-steps', async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.goto(BASE_URL + '#rag-assistant');
+    const { frame } = await waitForFrameLoad(page);
+    await waitForSettled(frame, 'overview');
+
+    await frame.locator('#node-team').click();
+    await expect(frame.locator('#detailPanel')).toHaveClass(/open/);
+    await expect(frame.locator('#dpTitle')).toHaveText('Research Team');
+    const liCount = await frame.locator('#dpMinorList li').count();
+    expect(liCount).toBeGreaterThanOrEqual(2);
+    await context.close();
+  });
+
+  test('menu button posts toggleSidebar to the parent', async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    await page.goto(BASE_URL + '#rag-assistant');
+    await waitForFrameLoad(page);
+
+    const initialCollapsed = await page.locator('.sidebar').evaluate(function (el) {
+      return el.classList.contains('collapsed');
+    });
+
+    await page.frameLocator('#frame').locator('#wfMenuBtn').click();
+    await page.waitForTimeout(400);
+
+    const afterCollapsed = await page.locator('.sidebar').evaluate(function (el) {
+      return el.classList.contains('collapsed');
+    });
+    expect(afterCollapsed).toBe(!initialCollapsed);
+    await context.close();
+  });
+
+  test('shell lists the workflow and #rag-assistant routes to it', async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.goto(BASE_URL);
+    await page.waitForSelector('#workflowList .wf-card');
+
+    const card = page.locator('[data-id="rag-assistant"]');
+    await expect(card).toBeVisible();
+    await expect(card.locator('.wf-title')).toHaveText('AI Guideline Research Assistant');
+
+    await page.goto(BASE_URL + '#rag-assistant');
+    const { frameHandle } = await waitForFrameLoad(page);
+    const src = await frameHandle.getAttribute('src');
+    expect(src.endsWith('workflows/rag-assistant.html')).toBeTruthy();
+    await context.close();
+  });
+
+  test('window.alert is never called', async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.goto(BASE_URL + '#rag-assistant');
+    const { frame } = await waitForFrameLoad(page);
+    await waitForSettled(frame, 'overview');
+
+    await frame.evaluate(function () {
+      window.__alertCalls = 0;
+      window.alert = function () { window.__alertCalls++; };
+    });
+
+    await frame.locator('#node-ask').click();
+    await frame.locator('#dpClose').click();
+    await frame.locator('#btnMinor').click();
+    await page.waitForTimeout(400);
+    await frame.locator('#node-team').click();
+
+    const alertCalls = await frame.evaluate(function () { return window.__alertCalls; });
+    expect(alertCalls).toBe(0);
+    await context.close();
+  });
+
+  test('default view: every card sits inside a 1440x900 viewport in Overview', async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    await page.goto(BASE_URL + '#rag-assistant');
+    const { frame } = await waitForFrameLoad(page);
+    await waitForSettled(frame, 'overview');
+    await page.waitForTimeout(300);
+
+    const boxes = await frame.evaluate(function (ids) {
+      return ids.map(function (id) {
+        var r = document.getElementById('node-' + id).getBoundingClientRect();
+        return { id: id, left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+      });
+    }, RAG_IDS);
+    boxes.forEach(function (b) {
+      expect(b.left).toBeGreaterThanOrEqual(0);
+      expect(b.top).toBeGreaterThanOrEqual(44); // topbar height
+      expect(b.right).toBeLessThanOrEqual(1440);
+      expect(b.bottom).toBeLessThanOrEqual(900);
+    });
+    await context.close();
+  });
+
+  test('screenshots for human review', async ({ browser }) => {
+    const fs = require('fs');
+    const path = require('path');
+    const outDir = path.join(__dirname, '..', 'test-results', 'rag-assistant');
+    fs.mkdirSync(outDir, { recursive: true });
+
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    await page.goto(BASE_URL + '#rag-assistant');
+    const { frame } = await waitForFrameLoad(page);
+    await waitForSettled(frame, 'overview');
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(outDir, '01-overview.png') });
+
+    await frame.locator('#btnMinor').click();
+    await waitForSettled(frame, 'detail');
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(outDir, '02-full-detail.png') });
+
+    await context.close();
+  });
 });
