@@ -52,6 +52,45 @@ const cv = WF.canvasFor(LGP_SPEC, LGP_HEIGHTS);
   check(near(O.y + O.h, D.y + D.h), 'upper lane card must keep its bottom fixed across modes');
 }
 
+/* ---- 2c. LeadGenPro with Branch C (two forks on one chain + pattern loop), heights from the Prompt C design session ---- */
+const LGP_C_HEIGHTS = {"trunk":{"overview":119,"detail":159},"prospector":{"overview":182,"detail":430},"database":{"overview":199,"detail":429},"crm":{"overview":182,"detail":423},"whatsapp":{"overview":199,"detail":483},"coldcall":{"overview":182,"detail":405},"analyzer":{"overview":199,"detail":458},"coach":{"overview":182,"detail":430},"stubB":{"overview":118,"detail":118},"radarOrch":{"overview":199,"detail":520},"collector":{"overview":199,"detail":540},"judge":{"overview":199,"detail":560},"contact":{"overview":182,"detail":470},"radarDb":{"overview":199,"detail":520},"pattern":{"overview":199,"detail":500},"projWriter":{"overview":199,"detail":520},"projSend":{"overview":230,"detail":560},"recWriter":{"overview":199,"detail":500},"recSend":{"overview":230,"detail":540}};
+const LGP_C_SPEC = { pattern: 'brain', hub: 'trunk',
+  branches: [
+    { id: 'A', dir: 'right', chain: ['prospector', 'database', 'crm'],
+      forks: [{ at: 'crm', lanes: [{ side: -1, chain: ['whatsapp'] }, { side: 1, chain: ['coldcall', 'analyzer', 'coach'] }] }] },
+    { id: 'B', dir: 'down', chain: ['stubB'] },
+    { id: 'C', dir: 'left', chain: ['radarOrch', 'collector', 'judge', 'contact', 'radarDb'],
+      forks: [
+        { at: 'judge', lanes: [ { side: -1, chain: ['pattern'] } ] },
+        { at: 'radarDb', lanes: [
+          { side: -1, chain: ['projWriter', 'projSend'] },
+          { side: 1, chain: ['recWriter', 'recSend'] }
+        ] }
+      ] }],
+  loops: [
+    { from: 'coach', to: 'crm' },
+    { from: 'pattern', to: 'radarOrch' }
+  ] };
+{
+  const cvC = WF.canvasFor(LGP_C_SPEC, LGP_C_HEIGHTS);
+  ['overview', 'detail'].forEach(function (m) {
+    const L = WF.layout(LGP_C_SPEC, LGP_C_HEIGHTS, m, { shifts: cvC.shifts });
+    const c = L.cards;
+    const v = WF.inspect(L, cvC);
+    check(v.length === 0, 'LGP-C ' + m + ' violations: ' + JSON.stringify(v));
+    check(near(c.pattern.x, c.contact.x), 'LGP-C ' + m + ' pattern must align with contact column');
+    check(c.pattern.y + c.pattern.h < c.contact.y, 'LGP-C ' + m + ' pattern must sit above Contact Finder');
+    check(near(c.projWriter.x, c.recWriter.x), 'LGP-C ' + m + ' both outreach lanes must share a column');
+    const byId = {}; L.pipes.forEach(function (p) { byId[p.id] = p; });
+    check(byId.pattern__radarOrch && byId.pattern__radarOrch.kind === 'feedback' && byId.pattern__radarOrch.dots === 0, 'LGP-C ' + m + ' pattern to orchestrator must be a zero-dot feedback pipe');
+    check(byId.coach__crm && byId.coach__crm.kind === 'feedback', 'LGP-C ' + m + ' original coach feedback pipe must still exist');
+    check(byId.judge__pattern && byId.judge__pattern.kind === 'sub', 'LGP-C ' + m + ' judge to pattern must be a sub pipe');
+    check(byId.radarDb__projWriter && byId.radarDb__projWriter.kind === 'sub', 'LGP-C ' + m + ' radarDb to projWriter must be a sub pipe');
+    check(byId.radarDb__recWriter && byId.radarDb__recWriter.kind === 'sub', 'LGP-C ' + m + ' radarDb to recWriter must be a sub pipe');
+    check(byId.judge__contact && byId.judge__contact.kind === 'main', 'LGP-C ' + m + ' judge to contact must be a main-chain pipe');
+  });
+}
+
 /* ---- 3. random brain specs, both modes ---- */
 function randomBrain(withLoops) {
   let n = 0; const H = {};

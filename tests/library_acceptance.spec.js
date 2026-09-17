@@ -316,7 +316,20 @@ test('Test 14: Branch A has exactly 7 detailed nodes', async ({ browser }) => {
   await context.close();
 });
 
+test('Test 14c: Branch C has exactly 10 detailed nodes', async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+  await page.waitForTimeout(500);
+
+  const count = await frame.locator('.node[data-branch="C"]').count();
+  expect(count).toBe(10);
+  await context.close();
+});
+
 test('Test 15: Stubs present and dimmed', async ({ browser }) => {
+  // Prompt C: Branch C live, Branch D retired -- only stubB (ProspectIQ) remains a stub.
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto(BASE_URL + '#leadgenpro');
@@ -325,7 +338,7 @@ test('Test 15: Stubs present and dimmed', async ({ browser }) => {
 
   const stubs = frame.locator('.node.stub');
   const count = await stubs.count();
-  expect(count).toBe(3);
+  expect(count).toBe(1);
   for (let i = 0; i < count; i++) {
     const stub = stubs.nth(i);
     const opacity = await stub.evaluate(function (el) {
@@ -334,6 +347,7 @@ test('Test 15: Stubs present and dimmed', async ({ browser }) => {
     expect(opacity).toBeGreaterThanOrEqual(0.35);
     expect(opacity).toBeLessThanOrEqual(0.50);
     await expect(stub).toContainText('COMING NEXT');
+    await expect(stub).toContainText('ProspectIQ');
   }
   await context.close();
 });
@@ -349,7 +363,22 @@ test('Test 16: Cold Call human-in-loop badge', async ({ browser }) => {
   await context.close();
 });
 
+test('Test 16c: Approval & Send cards carry the human badge and Auto-send switch', async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+  await page.waitForTimeout(500);
+
+  await expect(frame.locator('#node-projSend .human-in-loop-badge')).toHaveCount(1);
+  await expect(frame.locator('#node-recSend .human-in-loop-badge')).toHaveCount(1);
+  await expect(frame.locator('#node-projSend .auto-toggle')).toHaveCount(1);
+  await expect(frame.locator('#node-recSend .auto-toggle')).toHaveCount(1);
+  await context.close();
+});
+
 test('Test 17: AI Coach feedback edge exists', async ({ browser }) => {
+  // Prompt C: Branch C live, Branch D retired -- adds a second feedback loop (pattern -> radarOrch).
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto(BASE_URL + '#leadgenpro');
@@ -357,7 +386,8 @@ test('Test 17: AI Coach feedback edge exists', async ({ browser }) => {
   await page.waitForTimeout(500);
 
   const count = await frame.locator('.pipe[data-type="feedback"]').count();
-  expect(count).toBeGreaterThanOrEqual(1);
+  expect(count).toBeGreaterThanOrEqual(2);
+  await expect(frame.locator('.pipe[data-id="pattern__radarOrch"]')).toHaveCount(1);
   await context.close();
 });
 
@@ -420,6 +450,65 @@ test('Test 20: Full Detail toggle reveals sub-steps', async ({ browser }) => {
     if (liCount >= 3) { found = true; break; }
   }
   expect(found).toBeTruthy();
+  await context.close();
+});
+
+test('Test 20c: built vs in-development marking', async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+  await waitForSettled(frame, 'overview');
+
+  await frame.locator('#btnMinor').click();
+  await waitForSettled(frame, 'detail');
+
+  const branchCNodes = frame.locator('.node[data-branch="C"]');
+  const cCount = await branchCNodes.count();
+  for (let i = 0; i < cCount; i++) {
+    const liCount = await branchCNodes.nth(i).locator('.minor-steps li').count();
+    expect(liCount).toBeGreaterThanOrEqual(4);
+  }
+
+  await expect(frame.locator('.node[data-branch="A"] .minor-steps li.dev')).toHaveCount(0);
+
+  const devCount = await frame.locator('.node[data-branch="C"] .minor-steps li.dev').count();
+  const builtCount = await frame.locator('.node[data-branch="C"] .minor-steps li:not(.dev)').count();
+  expect(devCount).toBeGreaterThan(0);
+  expect(builtCount).toBeGreaterThan(0);
+
+  const planned = frame.locator('.node.planned');
+  await expect(planned).toHaveCount(1);
+  await expect(planned).toHaveAttribute('id', 'node-contact');
+  await expect(planned).toContainText('IN DEVELOPMENT');
+  const plannedOpacity = await planned.evaluate(function (el) {
+    return parseFloat(getComputedStyle(el).opacity);
+  });
+  expect(plannedOpacity).toBeGreaterThanOrEqual(0.55);
+  expect(plannedOpacity).toBeLessThanOrEqual(0.65);
+
+  await expect(frame.locator('.node.planned.stub')).toHaveCount(0);
+  await expect(frame.locator('#statusLegend')).toBeVisible();
+  await context.close();
+});
+
+test('Test 20d: panel shows the in-development note', async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+  await waitForSettled(frame, 'overview');
+
+  await frame.locator('#node-radarOrch').click();
+  await expect(frame.locator('#detailPanel')).toHaveClass(/open/);
+  await expect(frame.locator('#dpTag')).toContainText('Branch C');
+  await expect(frame.locator('#dpTag')).toContainText('of 10');
+  const devLis = await frame.locator('#dpMinorList li.dev').count();
+  expect(devLis).toBeGreaterThan(0);
+  await expect(frame.locator('#dpMinorList')).toContainText('Grey items are in development.');
+
+  await frame.locator('#node-contact').click();
+  await expect(frame.locator('#dpTag')).toContainText('In development');
   await context.close();
 });
 
@@ -691,6 +780,56 @@ test('Framework v2: screenshots for human review', async ({ browser }) => {
   await dragNode(page, frame, 'database', 0, 120);
   await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(outDir, '04-after-drag.png') });
+
+  await context.close();
+});
+
+test('Prompt C: screenshots for human review', async ({ browser }) => {
+  const fs = require('fs');
+  const path = require('path');
+  const outDir = path.join(__dirname, '..', 'test-results', 'lgp-branch-c');
+  fs.mkdirSync(outDir, { recursive: true });
+
+  const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+  const page = await context.newPage();
+  await page.goto(BASE_URL + '#leadgenpro');
+  const { frame } = await waitForFrameLoad(page);
+  await waitForSettled(frame, 'overview');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(outDir, '01-overview-fit.png') });
+
+  async function focusOn(ids) {
+    await frame.locator('body').press('0');
+    await page.waitForTimeout(200);
+    await zoomTo100(frame);
+    const focus = await frame.evaluate(function (fids) {
+      var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      fids.forEach(function (id) {
+        var r = document.getElementById('node-' + id).getBoundingClientRect();
+        x0 = Math.min(x0, r.left); y0 = Math.min(y0, r.top);
+        x1 = Math.max(x1, r.right); y1 = Math.max(y1, r.bottom);
+      });
+      return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, vw: window.innerWidth, vh: window.innerHeight };
+    }, ids);
+    await panFrame(page, frame, focus.vw / 2 - focus.cx, (focus.vh + 44) / 2 - focus.cy);
+    await page.waitForTimeout(300);
+  }
+
+  await focusOn(['judge', 'pattern', 'contact']);
+  await page.screenshot({ path: path.join(outDir, '02-branch-c-overview-100.png') });
+
+  await focusOn(['radarDb', 'projWriter', 'recWriter']);
+  await page.screenshot({ path: path.join(outDir, '03-branch-c-forks-100.png') });
+
+  await frame.locator('body').press('0');
+  await page.waitForTimeout(200);
+  await frame.locator('#btnMinor').click();
+  await waitForSettled(frame, 'detail');
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(outDir, '04-detail-fit.png') });
+
+  await focusOn(['radarOrch', 'collector', 'judge']);
+  await page.screenshot({ path: path.join(outDir, '05-branch-c-detail-100.png') });
 
   await context.close();
 });

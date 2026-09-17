@@ -197,11 +197,45 @@ checkNoStrings(
   'Call Analyzer',
   'AI Coach',
   'ProspectIQ + Apollo + Email',
-  'LinkedIn Radar + Apollo + Email',
-  'IT Staffing + Email'
+  'Radar Orchestrator',
+  'Collector Agents',
+  'Intent Judge',
+  'Contact Finder',
+  'Radar Database',
+  'Pattern Engine',
+  'Project Email Writer',
+  'Recruitment Email Writer',
+  'Approval & Send'
 ].forEach(function (title) {
   var pattern = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   checkMinHits('public/workflows/leadgenpro.html', pattern, 1, 'Check J');
+});
+
+/* Check T: public wording -- no infra/vendor internals leak into the public page */
+(function checkPublicWording() {
+  var rel = 'public/workflows/leadgenpro.html';
+  var content = readFile(rel);
+  if (/proxy|proxies|\bVPN\b|Vinay|burner|residential IP|fake account/i.test(content)) {
+    failures.push('Check T: forbidden public-wording pattern matched in ' + rel);
+  }
+})();
+
+/* Check U: retired stubs gone */
+checkNoStrings(
+  'public/workflows/leadgenpro.html',
+  ['stubC', 'stubD', 'IT Staffing + Email', 'LinkedIn Radar + Apollo + Email'],
+  'Check U'
+);
+
+/* Check V: built vs in-development marking is wired */
+[
+  'dev:true',
+  "status:'planned'",
+  'autoToggle:true',
+  'IN DEVELOPMENT',
+  'statusLegend'
+].forEach(function (pattern) {
+  checkMinHits('public/workflows/leadgenpro.html', pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 1, 'Check V');
 });
 
 /* Check K: split-rule comment present */

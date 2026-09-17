@@ -15,7 +15,7 @@
   Both are shipped open for now. When the PIN gate build lands, LOCKED content moves behind AES-decrypt-in-browser or a Cloudflare Pages Function.
 -->
 <!--
-  Standing pattern for LeadGenPro branch expansions (Prompts C, D, E):
+  Standing pattern for LeadGenPro branch expansions (Branch B next; Branch D retired, IT Staffing now lives inside Branch C):
     Each new branch is authored inside THIS file, not a new file.
     The stub node for that branch is REPLACED IN PLACE with the full branch's node chain.
     Each branch expansion edits WF_SPEC (structure) and NODES (content) only; the framework places everything.
@@ -102,12 +102,29 @@ body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;colo
 .human-in-loop-badge{position:absolute;top:-9px;right:-9px;width:20px;height:20px;border-radius:50%;background:var(--warn);color:var(--bg-900);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.4);z-index:3;}
 .human-in-loop-badge svg{display:block;}
 
+.node.planned{opacity:.6;filter:saturate(.35);border-color:var(--ink-dim);}
+.node.planned.selected{opacity:.6;}
+.dev-tag{position:absolute;top:-9px;left:12px;background:var(--bg-700);color:var(--ink-mute);border:1px solid var(--ink-dim);font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:10px;z-index:2;}
+
+.auto-toggle{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-dim);}
+.auto-switch{width:26px;height:14px;border-radius:7px;border:1.5px solid var(--ink-dim);position:relative;display:inline-block;}
+.auto-switch::after{content:'';position:absolute;left:2px;top:1.5px;width:8px;height:8px;border-radius:50%;background:var(--ink-dim);}
+
+#statusLegend{position:fixed;left:16px;bottom:10px;z-index:45;pointer-events:none;display:flex;gap:14px;font-size:11px;color:var(--ink-dim);}
+.lg-dot{width:5px;height:5px;border-radius:50%;background:var(--accent-lt);display:inline-block;margin-right:6px;}
+.lg-dot.dev{background:transparent;border:1.5px solid var(--ink-dim);box-sizing:border-box;width:7px;height:7px;}
+
+.dp-legend-note .txt{color:var(--ink-dim);font-size:11px;}
+
 .minor-wrap{padding:0 15px;max-height:0;overflow:hidden;transition:max-height .45s cubic-bezier(.4,0,.2,1);}
 .minor-inner{padding-bottom:14px;}
 .minor-steps{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:7px;}
 .minor-steps li{display:flex;align-items:flex-start;gap:8px;}
 .minor-steps .dot{width:5px;height:5px;margin-top:6px;border-radius:50%;background:var(--accent-dim);flex:none;}
 .minor-steps .txt{font-size:12px;line-height:1.5;color:var(--ink-mute);}
+.minor-steps li:not(.dev) .dot, .dp-minor-list li:not(.dev) .dot{background:var(--accent-lt);}
+.minor-steps li.dev .dot, .dp-minor-list li.dev .dot{background:transparent;border:1.5px solid var(--ink-dim);box-sizing:border-box;width:7px;height:7px;margin-top:5px;}
+.minor-steps li.dev .txt, .dp-minor-list li.dev .txt{color:var(--ink-dim);}
 
 .pipe path{fill:none;stroke:var(--accent-dim);stroke-width:2;opacity:.55;}
 .pipe-trunk-branch path{stroke-width:2.4;opacity:.65;}
@@ -220,6 +237,8 @@ body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;colo
 
 <div class="footer">Illustrative scale, not live data.</div>
 
+<div id="statusLegend"><span><span class="lg-dot"></span> Built and running</span><span><span class="lg-dot dev"></span> In development</span></div>
+
 <script src="../framework/wf-framework-v2.js?v=2.0.0"></script>
 <script>
 (function(){
@@ -240,9 +259,9 @@ var NODES = [
   {
     id:'trunk', kind:'trunk', title:'Leadgenpro', subtitle:'Multi Channel Platform',
     counters:[
-      { id:'branches', label:'Branches live', type:'fixed', value:'1 of 4', fmt:'text' }
+      { id:'branches', label:'Branches mapped', type:'fixed', value:'2 of 3', fmt:'text' }
     ],
-    minor:['4 branches total. A live (this build). B, C, D scheduled.'],
+    minor:['3 branches. A: outreach and calling. C: LinkedIn Radar. B: ProspectIQ, scheduled.'],
     tooltip:{
       what:'A tree of independent branches. Each branch is its own closed loop for lead sourcing, storage, enrichment, and outreach.',
       why:'Different lead types come from different places and need different playbooks. One monolithic pipeline would force every lead through the same steps, which loses the signal.'
@@ -386,14 +405,200 @@ var NODES = [
     stubMessage:'Company discovery through ProspectIQ, contact enrichment through the Apollo API, then routed to a shared cold email outreach node. Ships in an upcoming release of the Workflow Library.'
   },
   {
-    id:'stubC', kind:'stub', branchId:'C',
-    title:'LinkedIn Radar + Apollo + Email', subtitle:'Hiring-intent capture, research-personalized email',
-    stubMessage:'Captures hiring-intent posts from LinkedIn, enriches the poster through Apollo, then runs a research-personalized cold email tailored to the requirement they posted. Ships in an upcoming release.'
+    id:'radarOrch', kind:'node', branchId:'C',
+    title:'Radar Orchestrator', subtitle:'Plans keyword sets per account for two hunts',
+    counters:[
+      { id:'sets', label:'Keyword sets live', type:'gauge', mean:24, min:20, max:28, vol:1.5, fmt:'int' },
+      { id:'pool', label:'Accounts in pool', type:'fixed', value:5, fmt:'int' }
+    ],
+    minor:[
+      'Keyword campaigns: pick lanes or describe an ICP and the LLM plans the phrases',
+      'Rotation favours keywords that surface real requirement posts',
+      'Dead keywords go dormant and the LLM proposes fresh phrases',
+      'Hard safety limits per account: daily read cap, working hours, gap between scans',
+      { t:'Two hunts: project requirements and IT recruitment', dev:true },
+      { t:'Assigns keyword sets across a pool of 4-5 accounts, one live at a time', dev:true },
+      { t:'Shares winning strategies with other accounts as variations, never identical copies', dev:true }
+    ],
+    tooltip:{
+      what:'The planner for Radar. Decides which account searches which keyword set, for which hunt, and when. Safety limits are enforced in code; the LLM only proposes.',
+      why:'One account reads too few posts to find enough real leads, and most posts fail the judge. A pool with one planner raises volume without any single account reading like a bot.'
+    }
   },
   {
-    id:'stubD', kind:'stub', branchId:'D',
-    title:'IT Staffing + Email', subtitle:'Manual sheet ingest, stream routing, cold email',
-    stubMessage:'Manual ingest of a sourced staffing sheet, LLM-classified into three opportunity streams, routed to the shared cold email outreach node. Ships in an upcoming release.'
+    id:'collector', kind:'node', branchId:'C',
+    title:'Collector Agents', subtitle:'Human-paced readers, one account live at a time',
+    counters:[
+      { id:'read', label:'Posts read today', type:'cumulative', seed:0, rate:[2.3,3.1], fmt:'int' },
+      { id:'live', label:'Live account', type:'fixed', value:'1 of 5', fmt:'text' }
+    ],
+    minor:[
+      'On-device Chrome extension, nothing scraped server-side',
+      'Reads search results page by page and expands every truncated post',
+      'Captures the author profile link, post link and full text',
+      'Stops hard on any LinkedIn warning, with manual skip, stop and pause controls',
+      { t:'Account pool rotation with randomized rest between runs', dev:true },
+      { t:'Every run tagged with its account code', dev:true }
+    ],
+    tooltip:{
+      what:'A browser extension reads LinkedIn search results the way a person does: one page at a time, opening each post in full, resting between runs.',
+      why:'Human pace and strict daily limits keep accounts healthy. Capturing the full post and the author link here means most leads never need a second LinkedIn visit.'
+    }
+  },
+  {
+    id:'judge', kind:'node', branchId:'C',
+    title:'Intent Judge', subtitle:'Keeps only real requirement posts, tags hunt and source',
+    counters:[
+      { id:'verified', label:'Verified today', type:'cumulative', seed:0, rate:[0.55,0.8], fmt:'int' },
+      { id:'pass', label:'Pass rate', type:'meanrevert', mean:24, min:20, max:28, vol:1.2, fmt:'pct0' }
+    ],
+    minor:[
+      'Free rule-based prefilter drops spam and self-promotion before any LLM call',
+      'Fingerprint dedup and a verdict cache, so a post is judged once',
+      'Two-stage LLM verdict scores intent, urgency and ICP fit against a fixed schema',
+      'Human thumbs up or down corrects verdicts in the QA tab',
+      'Daily report: code computes every number, the LLM only writes the narrative',
+      { t:'Tags each lead Project or Recruitment, and direct employer or agency', dev:true },
+      { t:'Per-account run report sent back to the Orchestrator', dev:true }
+    ],
+    tooltip:{
+      what:'Every captured post passes a free rule filter, then an LLM judge that scores intent, urgency and fit. Survivors are tagged by hunt and by who posted them.',
+      why:'Most posts are noise, sellers or agency recruiters. Judging every post and keeping the evidence is what shows which keywords actually work.'
+    }
+  },
+  {
+    id:'contact', kind:'node', branchId:'C', status:'planned',
+    title:'Contact Finder', subtitle:'Apollo match by profile link, work email only',
+    counters:[
+      { id:'emails', label:'Emails found', type:'cumulative', seed:0, rate:[0.35,0.55], fmt:'int' },
+      { id:'match', label:'Match rate', type:'meanrevert', mean:62, min:55, max:70, vol:2, fmt:'pct0' }
+    ],
+    minor:[
+      { t:'Apollo People Enrichment matched by the author profile link', dev:true },
+      { t:'Company name read from the match, so most profiles are never opened', dev:true },
+      { t:'Profile opened only when Apollo finds no match, under a daily cap', dev:true },
+      { t:'Work emails only, personal emails never requested', dev:true },
+      { t:'Low-confidence matches held for review', dev:true }
+    ],
+    tooltip:{
+      what:'Sends the post author profile link to Apollo, which returns the person, their current company and a work email.',
+      why:'Opening a profile for every lead adds risk to the account. Matching by profile link finds the company and the email in one call, and a miss costs nothing.'
+    }
+  },
+  {
+    id:'radarDb', kind:'node', branchId:'C',
+    title:'Radar Database', subtitle:'One pool for Radar leads and uploaded sheets',
+    counters:[
+      { id:'pool', label:'Leads in pool', type:'fixed', value:1520, fmt:'int-comma' },
+      { id:'added', label:'Added today', type:'cumulative', seed:0, rate:[0.3,0.5], fmt:'int' }
+    ],
+    minor:[
+      'Manual sheet upload, sorted into streams by keyword rules plus an LLM classifier',
+      'Dedup across uploads and repeat-poster tracking',
+      'Manual edits survive re-uploads, every action logged to the user who took it',
+      'Do-not-contact, highlight and CSV export per lead',
+      { t:'Radar leads and uploaded leads merged into one pool', dev:true }
+    ],
+    tooltip:{
+      what:'Stores every lead with its requirement, source, stream and contact. Leads found outside LinkedIn arrive by sheet upload and pass the same classifier.',
+      why:'Two sources feeding one pool means one dedup, one do-not-contact list and one outreach queue, so nobody gets emailed twice.'
+    }
+  },
+  {
+    id:'pattern', kind:'node', branchId:'C',
+    title:'Pattern Engine', subtitle:'Learns which keywords find real leads, no LLM needed',
+    counters:[
+      { id:'tested', label:'Variations tested', type:'fixed', value:186, fmt:'int' },
+      { id:'winners', label:'Winners shared', type:'gauge', mean:6, min:3, max:9, vol:0.8, fmt:'int' }
+    ],
+    minor:[
+      'Yield per keyword drives how often it runs',
+      'Keyword goes dormant after repeated scans with no real lead',
+      'Yield table per keyword and search method in the daily report',
+      { t:'Stats per account, time slot and region, judged only after a minimum sample', dev:true },
+      { t:'Explore vs exploit split keeps testing new variations', dev:true },
+      { t:'Winners sent back to the Orchestrator for the other accounts', dev:true }
+    ],
+    tooltip:{
+      what:'Plain code tracks every keyword variation: posts read and posts that passed the judge, per account, time and region. It favours what pays off and keeps testing new variations.',
+      why:'At a few dozen real leads a day, an LLM reading the latest numbers would chase luck. Counting first, and asking the LLM only for new phrasing, keeps strategy grounded.'
+    }
+  },
+  {
+    id:'projWriter', kind:'node', branchId:'C',
+    title:'Project Email Writer', subtitle:'AI and automation pitch, grounded in research',
+    counters:[
+      { id:'drafts', label:'Drafts today', type:'cumulative', seed:0, rate:[0.2,0.35], fmt:'int' },
+      { id:'critic', label:'Critic pass', type:'meanrevert', mean:86, min:80, max:92, vol:1.5, fmt:'pct0' }
+    ],
+    minor:[
+      'Researches the company website and cites a source for every fact',
+      'Relevance gate and vendor check before a draft is written',
+      'LLM writer plus a critic, drafts validated before they reach approval',
+      'Matches a similar past project to the requirement',
+      { t:'Web search by company name when no website is found', dev:true },
+      { t:'Falls back to the requirement alone when research finds nothing', dev:true }
+    ],
+    tooltip:{
+      what:'Reads the requirement and the company research, then writes a short email on how we would build it, with a similar past project as proof.',
+      why:'A pitch built on the requirement the prospect posted and real facts about them earns replies. Every claim traces to a source, so nothing is invented.'
+    }
+  },
+  {
+    id:'projSend', kind:'node', branchId:'C', badge:'human', autoToggle:true,
+    title:'Approval & Send', subtitle:'Human approves, sent in local business hours',
+    counters:[
+      { id:'sent', label:'Sent today', type:'cumulative', seed:0, rate:[0.18,0.3], fmt:'int' },
+      { id:'reply', label:'Reply rate', type:'meanrevert', mean:6, min:4, max:8, vol:0.6, fmt:'pct0' }
+    ],
+    minor:[
+      'Every draft approved by a human before it can send',
+      'Scheduled in the recipient local time across 90+ countries',
+      'Mailbox pool with warm-up ramp, per-domain limits and a bounce breaker',
+      'A reply stops follow-ups, and the inbox lets a human answer in thread',
+      { t:'Auto-send switch: runs without approval once drafts prove out', dev:true }
+    ],
+    tooltip:{
+      what:'A human approves each draft. The engine picks a mailbox, schedules it in the recipient local hours, sends follow-ups and stops the moment someone replies.',
+      why:'One bad email burns a prospect for good. Approval keeps quality high now, and the auto-send switch hands the loop to the machine once the drafts earn it.'
+    }
+  },
+  {
+    id:'recWriter', kind:'node', branchId:'C',
+    title:'Recruitment Email Writer', subtitle:'Staff augmentation pitch for open roles',
+    counters:[
+      { id:'drafts', label:'Drafts today', type:'cumulative', seed:0, rate:[0.15,0.28], fmt:'int' },
+      { id:'critic', label:'Critic pass', type:'meanrevert', mean:84, min:78, max:90, vol:1.5, fmt:'pct0' }
+    ],
+    minor:[
+      'Email composed from the lead drawer, recipient checked against known addresses',
+      'Duplicate-recipient warning before anyone is emailed twice',
+      { t:'Company research reused from the project pitch engine', dev:true },
+      { t:'LLM drafts a staff augmentation pitch matched to the open role', dev:true },
+      { t:'Agency posts dropped by default, direct employers only', dev:true }
+    ],
+    tooltip:{
+      what:'Writes to companies hiring for tech roles, offering vetted developers on contract, matched to the role they posted.',
+      why:'A company already hiring has budget and urgency. Pitching augmentation against the exact role is a warmer opening than a generic services email.'
+    }
+  },
+  {
+    id:'recSend', kind:'node', branchId:'C', badge:'human', autoToggle:true,
+    title:'Approval & Send', subtitle:'Human approves, stage tracked per lead',
+    counters:[
+      { id:'sent', label:'Sent today', type:'cumulative', seed:0, rate:[0.12,0.22], fmt:'int' },
+      { id:'reply', label:'Reply rate', type:'meanrevert', mean:5, min:3, max:7, vol:0.5, fmt:'pct0' }
+    ],
+    minor:[
+      'Send blocked for any lead marked do-not-contact',
+      'Outreach stage tracked per lead: contacted, follow-up 1, 2, 3+',
+      { t:'Same mailbox pool and local-time scheduler as the project lane', dev:true },
+      { t:'Auto-send switch: runs without approval once drafts prove out', dev:true }
+    ],
+    tooltip:{
+      what:'A human approves each recruitment email, then it sends, and every lead shows where it sits in the follow-up sequence.',
+      why:'Hiring posts go cold within days. Tracking the stage per lead means follow-ups land while the role is still open.'
+    }
   }
 ];
 
@@ -407,22 +612,32 @@ var WF_SPEC = {
         { side:  1, chain: ['coldcall', 'analyzer', 'coach'] }
       ] }] },
     { id: 'B', dir: 'down',  chain: ['stubB'] },
-    { id: 'C', dir: 'left',  chain: ['stubC'] },
-    { id: 'D', dir: 'up',    chain: ['stubD'] }
+    { id: 'C', dir: 'left',  chain: ['radarOrch', 'collector', 'judge', 'contact', 'radarDb'],
+      forks: [
+        { at: 'judge',   lanes: [ { side: -1, chain: ['pattern'] } ] },
+        { at: 'radarDb', lanes: [
+          { side: -1, chain: ['projWriter', 'projSend'] },
+          { side:  1, chain: ['recWriter', 'recSend'] }
+        ] }
+      ] }
   ],
-  loops: [{ from: 'coach', to: 'crm' }]
+  loops: [
+    { from: 'coach',   to: 'crm' },
+    { from: 'pattern', to: 'radarOrch' }
+  ]
 };
 var rt = null;
 
 // Read off WF_SPEC so the detail panel's "node N of M" tag can never drift from the structure.
-var branchNodeIds = (function(){
-  var br = WF_SPEC.branches.filter(function(b){ return b.id === 'A'; })[0];
+function branchIdsFor(branchId){
+  var br = WF_SPEC.branches.filter(function(b){ return b.id === branchId; })[0];
+  if(!br) return [];
   var ids = br.chain.slice();
   (br.forks || []).forEach(function(fk){
     fk.lanes.forEach(function(ln){ ids = ids.concat(ln.chain); });
   });
   return ids;
-})();
+}
 
 /* ---------- state ---------- */
 var NODE_BY_ID = {};
@@ -446,6 +661,8 @@ function escapeHtml(s){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
   });
 }
+function minorText(item){ return typeof item === 'string' ? item : item.t; }
+function minorIsDev(item){ return typeof item === 'object' && item !== null && !!item.dev; }
 function fmtCounter(c, v){
   switch(c.fmt){
     case 'int': return String(Math.round(v));
@@ -481,10 +698,11 @@ function buildNodes(){
     var cls = 'node';
     if(n.kind==='trunk') cls += ' trunk';
     if(n.kind==='stub') cls += ' stub';
+    if(n.status==='planned') cls += ' planned';
     el.className = cls;
     el.id = 'node-'+n.id;
     el.setAttribute('data-id', n.id);
-    if(n.branchId==='A') el.setAttribute('data-branch','A');
+    if(n.branchId) el.setAttribute('data-branch', n.branchId);
     el.style.width = (n.kind === 'trunk' ? WF.TOKENS.HUB_W : WF.TOKENS.CARD_W) + 'px';
 
     if(n.kind==='stub'){
@@ -492,6 +710,13 @@ function buildNodes(){
       tag.className = 'stub-tag';
       tag.textContent = 'COMING NEXT';
       el.appendChild(tag);
+    }
+
+    if(n.status==='planned'){
+      var devTag = document.createElement('div');
+      devTag.className = 'dev-tag';
+      devTag.textContent = 'IN DEVELOPMENT';
+      el.appendChild(devTag);
     }
 
     if(n.badge==='human'){
@@ -522,6 +747,14 @@ function buildNodes(){
         countersDiv.appendChild(cEl);
       });
       header.appendChild(countersDiv);
+    }
+
+    if(n.autoToggle){
+      var autoDiv = document.createElement('div');
+      autoDiv.className = 'auto-toggle';
+      autoDiv.setAttribute('aria-hidden','true');
+      autoDiv.innerHTML = '<span class="auto-switch"></span><span>Auto-send: off</span>';
+      header.appendChild(autoDiv);
     }
 
     if(n.minor){
@@ -621,8 +854,11 @@ function positionTooltip(el, tip){
 function tagFor(n){
   if(n.kind==='trunk') return 'Trunk';
   if(n.kind==='stub') return 'Coming next';
-  var idx = branchNodeIds.indexOf(n.id);
-  return 'Branch A · node '+(idx+1)+' of '+branchNodeIds.length;
+  var ids = branchIdsFor(n.branchId);
+  var idx = ids.indexOf(n.id);
+  var tag = 'Branch '+n.branchId+' · node '+(idx+1)+' of '+ids.length;
+  if(n.status==='planned') tag += ' · In development';
+  return tag;
 }
 
 function clearSelection(){
@@ -679,9 +915,11 @@ function openPanel(n){
 
     if(n.minor){
       minorSection.style.display = '';
+      var hasDev = n.minor.some(minorIsDev);
       document.getElementById('dpMinorList').innerHTML = n.minor.map(function(item){
-        return '<li><span class="dot"></span><span class="txt">'+escapeHtml(item)+'</span></li>';
-      }).join('');
+        var dev = minorIsDev(item);
+        return '<li'+(dev?' class="dev"':'')+'><span class="dot"></span><span class="txt">'+escapeHtml(minorText(item))+'</span></li>';
+      }).join('') + (hasDev ? '<li class="dp-legend-note"><span class="txt">Grey items are in development.</span></li>' : '');
     } else {
       minorSection.style.display = 'none';
     }
@@ -701,7 +939,8 @@ function closePanel(){
 function renderMinorContent(n, wrap){
   var html = '<div class="minor-inner"><ul class="minor-steps">';
   n.minor.forEach(function(item){
-    html += '<li><span class="dot"></span><span class="txt">'+escapeHtml(item)+'</span></li>';
+    var dev = minorIsDev(item);
+    html += '<li'+(dev?' class="dev"':'')+'><span class="dot"></span><span class="txt">'+escapeHtml(minorText(item))+'</span></li>';
   });
   html += '</ul></div>';
   wrap.innerHTML = html;
