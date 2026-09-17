@@ -14,7 +14,7 @@ function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 
 function ri(a, b) { return a + Math.floor(rnd() * (b - a + 1)); }
 
 /* ---- 1. version + tokens ---- */
-check(WF.VERSION === '2.2.0', 'VERSION must be 2.2.0');
+check(WF.VERSION === '2.3.0', 'VERSION must be 2.3.0');
 check(Object.isFrozen(T), 'TOKENS must be frozen');
 check(T.CARD_W === 170 && T.HUB_W === 340 && T.GAP_CHAIN === 72 && T.GAP_BRANCH === 90 && T.GAP_LOOP === 45 && T.GAP_SECTOR === 120, 'tier values changed');
 check(WF.dotCount(72) === 4 && WF.dotCount(10) === T.DOT_MIN && WF.dotCount(5000) === T.DOT_MAX, 'dotCount formula');
@@ -269,7 +269,7 @@ const RAG_SPEC = {
   pattern: 'brain', hub: 'kb',
   branches: [
     { id: 'K', dir: 'left', flow: 'in', chain: ['organize', 'extract', 'intake'] },
-    { id: 'Q', dir: 'up', flow: 'in', chain: ['narrow', 'ask'] },
+    { id: 'Q', dir: 'up', flow: 'in', chain: ['narrow', 'user'] },
     { id: 'A', dir: 'right', chain: ['team'],
       forks: [{ at: 'team', lanes: [
         { side: -1, chain: ['quick'] },
@@ -278,9 +278,9 @@ const RAG_SPEC = {
       ] }] }
   ]
 };
-const RAG_IDS = ['kb', 'intake', 'extract', 'organize', 'ask', 'narrow', 'team', 'quick', 'deep', 'compare', 'shortlist'];
+const RAG_IDS = ['kb', 'intake', 'extract', 'organize', 'user', 'narrow', 'team', 'quick', 'deep', 'compare', 'shortlist'];
 const RAG_HEIGHTS = { kb: { overview: 200, detail: 260 }, intake: { overview: 190, detail: 400 }, extract: { overview: 190, detail: 420 },
-  organize: { overview: 190, detail: 410 }, ask: { overview: 182, detail: 380 }, narrow: { overview: 190, detail: 400 },
+  organize: { overview: 190, detail: 410 }, user: { overview: 182, detail: 380 }, narrow: { overview: 190, detail: 400 },
   team: { overview: 190, detail: 400 }, quick: { overview: 182, detail: 340 }, deep: { overview: 182, detail: 360 },
   compare: { overview: 182, detail: 360 }, shortlist: { overview: 182, detail: 360 } };
 
@@ -290,10 +290,10 @@ const RAG_HEIGHTS = { kb: { overview: 200, detail: 260 }, intake: { overview: 19
   ['overview', 'detail'].forEach(function (m) {
     const L = WF.layout(RAG_SPEC, RAG_HEIGHTS, m, { shifts: cv7.shifts });
     const ids = L.pipes.map(function (p) { return p.id; });
-    ['intake__extract', 'extract__organize', 'organize__kb', 'ask__narrow', 'narrow__kb'].forEach(function (id) {
+    ['intake__extract', 'extract__organize', 'organize__kb', 'user__narrow', 'narrow__kb'].forEach(function (id) {
       check(ids.indexOf(id) >= 0, '7b: reversed pipe ' + id + ' must exist in ' + m);
     });
-    ['kb__organize', 'kb__narrow', 'organize__extract', 'narrow__ask'].forEach(function (id) {
+    ['kb__organize', 'kb__narrow', 'organize__extract', 'narrow__user'].forEach(function (id) {
       check(ids.indexOf(id) < 0, '7b: forward pipe ' + id + ' must not exist in ' + m);
     });
   });
@@ -338,6 +338,101 @@ const RAG_HEIGHTS = { kb: { overview: 200, detail: 260 }, intake: { overview: 19
   threw = false;
   try { WF.canvasFor(specLoopIn, FH); } catch (e) { threw = true; }
   check(threw, '7d: a loop naming a card on a flow:in branch must throw');
+}
+
+/* ---- 8. return pipes (framework 2.3.0) ---- */
+const RAG_SPEC_RET = { pattern: RAG_SPEC.pattern, hub: RAG_SPEC.hub, branches: RAG_SPEC.branches,
+  returns: [{ from: 'team', to: 'user' }] };
+
+/* 8a. no card moves; the canvas is unchanged (or, if it grows, only on the sides the route uses) */
+{
+  const cvNo = WF.canvasFor(RAG_SPEC, RAG_HEIGHTS), cvRet = WF.canvasFor(RAG_SPEC_RET, RAG_HEIGHTS);
+  ['overview', 'detail'].forEach(function (m) {
+    const Lno = WF.layout(RAG_SPEC, RAG_HEIGHTS, m, { shifts: cvNo.shifts });
+    const Lret = WF.layout(RAG_SPEC_RET, RAG_HEIGHTS, m, { shifts: cvRet.shifts });
+    check(JSON.stringify(Lno.cards) === JSON.stringify(Lret.cards), '8a: adding returns must not move any card in ' + m);
+  });
+  check(cvRet.w >= cvNo.w && cvRet.h >= cvNo.h, '8a: canvas can only grow, never shrink, when a return is added');
+  check(cvRet.originX <= cvNo.originX && cvRet.originY <= cvNo.originY, '8a: canvas growth can only extend the origin toward the top/left, matching the route (rises up, corridor to the right of centre)');
+  check(cvRet.originX + cvRet.w >= cvNo.originX + cvNo.w && cvRet.originY + cvRet.h >= cvNo.originY + cvNo.h, '8a: the far edge of the canvas can only grow or stay put');
+}
+
+/* 8b. the pipe exists, kind return, carries dots */
+{
+  const cv8 = WF.canvasFor(RAG_SPEC_RET, RAG_HEIGHTS);
+  ['overview', 'detail'].forEach(function (m) {
+    const L = WF.layout(RAG_SPEC_RET, RAG_HEIGHTS, m, { shifts: cv8.shifts });
+    const p = L.pipes.filter(function (x) { return x.id === 'team__user'; })[0];
+    check(!!p, '8b: team__user pipe must exist in ' + m);
+    check(p && p.kind === 'return', '8b: team__user must be kind "return" in ' + m);
+    check(p && p.dots > 0, '8b: a return pipe must carry dots in ' + m);
+  });
+}
+
+/* 8c. the route is orthogonal apart from its rounded corners */
+{
+  const cv8 = WF.canvasFor(RAG_SPEC_RET, RAG_HEIGHTS);
+  ['overview', 'detail'].forEach(function (m) {
+    const L = WF.layout(RAG_SPEC_RET, RAG_HEIGHTS, m, { shifts: cv8.shifts });
+    const p = L.pipes.filter(function (x) { return x.id === 'team__user'; })[0];
+    const nonAxis = p.segs.filter(function (s) { return !(near(s[0].x, s[3].x, 0.05) || near(s[0].y, s[3].y, 0.05)); });
+    check(nonAxis.length === 3, '8c: the return must have exactly 3 rounded corners in ' + m + ', found ' + nonAxis.length);
+  });
+}
+
+/* 8d. clearance holds: fixed heights, mid-animation frames, and >= 200 random height sets, both modes */
+{
+  const cv8 = WF.canvasFor(RAG_SPEC_RET, RAG_HEIGHTS);
+  ['overview', 'detail'].forEach(function (m) {
+    const v = WF.inspect(WF.layout(RAG_SPEC_RET, RAG_HEIGHTS, m, { shifts: cv8.shifts }), cv8);
+    check(v.length === 0, '8d: RAG+returns fixed-heights ' + m + ' violations: ' + JSON.stringify(v));
+  });
+  let retRuns = 0, retBad = 0, retMidRuns = 0, retMidBad = 0;
+  for (let t = 0; t < 200; t++) {
+    const H = {};
+    RAG_IDS.forEach(function (id) {
+      const ov = ri(150, 240), dt = ov + ri(180, 440);
+      H[id] = { overview: ov, detail: dt };
+    });
+    const c = WF.canvasFor(RAG_SPEC_RET, H);
+    ['overview', 'detail'].forEach(function (m) {
+      retRuns++;
+      const v = WF.inspect(WF.layout(RAG_SPEC_RET, H, m, { shifts: c.shifts }), c);
+      if (v.length) { retBad++; if (retBad <= 3) failures.push('8d: random RAG+returns heights ' + m + ': ' + JSON.stringify(v.slice(0, 2))); }
+    });
+    const mid = {};
+    RAG_IDS.forEach(function (id) { const p = rnd(); const h = H[id].overview + p * (H[id].detail - H[id].overview); mid[id] = { overview: h, detail: h }; });
+    retMidRuns++;
+    const v = WF.inspect(WF.layout(RAG_SPEC_RET, mid, 'overview', { shifts: c.shifts }), c);
+    if (v.length) { retMidBad++; if (retMidBad <= 3) failures.push('8d: mid-animation RAG+returns: ' + JSON.stringify(v.slice(0, 2))); }
+  }
+  check(retBad === 0, '8d: random RAG+returns height sets with violations: ' + retBad + ' of ' + retRuns);
+  check(retMidBad === 0, '8d: mid-animation RAG+returns layouts with violations: ' + retMidBad + ' of ' + retMidRuns);
+}
+
+/* 8e. refusals: same branch, either endpoint the hub, unknown card id, returns on a line pattern */
+{
+  const FH2 = { n1: { overview: 100, detail: 100 }, n2: { overview: 100, detail: 100 } };
+  let threw = false;
+  try { WF.layout(Object.assign({}, RAG_SPEC, { returns: [{ from: 'quick', to: 'deep' }] }), RAG_HEIGHTS, 'overview'); } catch (e) { threw = true; }
+  check(threw, '8e: a return whose endpoints share one branch must throw');
+
+  threw = false;
+  try { WF.layout(Object.assign({}, RAG_SPEC, { returns: [{ from: 'kb', to: 'user' }] }), RAG_HEIGHTS, 'overview'); } catch (e) { threw = true; }
+  check(threw, '8e: a return from the hub must throw');
+
+  threw = false;
+  try { WF.layout(Object.assign({}, RAG_SPEC, { returns: [{ from: 'team', to: 'kb' }] }), RAG_HEIGHTS, 'overview'); } catch (e) { threw = true; }
+  check(threw, '8e: a return to the hub must throw');
+
+  threw = false;
+  try { WF.layout(Object.assign({}, RAG_SPEC, { returns: [{ from: 'team', to: 'nope' }] }), RAG_HEIGHTS, 'overview'); } catch (e) { threw = true; }
+  check(threw, '8e: a return naming an unknown card must throw');
+
+  threw = false;
+  const lineSpec = { pattern: 'line', chain: ['n1', 'n2'], returns: [{ from: 'n1', to: 'n2' }] };
+  try { WF.layout(lineSpec, FH2, 'overview'); } catch (e) { threw = true; }
+  check(threw, '8e: a returns entry on a line pattern spec must throw');
 }
 
 if (failures.length) {

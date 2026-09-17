@@ -1,6 +1,6 @@
 # Workflow Library Framework v2
 
-**Version:** 2.2.0 (designed and validated 2026-09-17, flow:'in' branches added 2026-09-18)
+**Version:** 2.3.0 (designed and validated 2026-09-17, flow:'in' branches added 2026-09-18, the `returns` pipe added 2026-09-18)
 **Code:** `public/framework/wf-framework-v2.js` (layout core + DOM runtime, one file, no dependencies)
 **Tests:** `tests/framework_unit.js` (Node) + the "Framework v2" tests in `tests/library_acceptance.spec.js` (browser)
 **Replaces:** Measurement Framework v1 (radial angles, shipped in Prompt B-Fix-2). v1 is retired.
@@ -151,6 +151,16 @@ var WF_SPEC = {
   moving dots follow the reversed pipe direction, so the eye reads the branch flowing toward the hub. A
   `flow: 'in'` branch may not declare `forks`, and may not be named in any `loops` entry (`from` or `to`),
   so the code throws rather than render untested geometry.
+- `returns` (2.3.0, brain only): a pipe from a card on one branch to a card on a DIFFERENT branch, drawn
+  the long way round the outside of the layout rather than straight across (section 7 has the route).
+  Unlike `loops`, a return carries dots -- it is a real data path back to another part of the diagram,
+  not a feedback annotation.
+  ```js
+  returns: [{ from: 'team', to: 'user' }]
+  ```
+  Four things throw rather than render untested geometry: `from` and `to` on the same branch (that is a
+  loop, use `loops`), either endpoint being the hub, an unknown card id, and a `returns` entry on a `line`
+  pattern spec.
 
 ### Line
 
@@ -174,6 +184,7 @@ var WF_SPEC = {
 | Loops on `right`/`left` branches from the OUTERMOST lane back to a main card at or before the fork | Loops on `up`/`down` branches |
 | One satellite above and any satellites below (Line) | Branches that cannot be cleared from each other |
 | A branch whose flow runs into the hub (`flow: 'in'`) | A `flow: 'in'` branch with forks or loops |
+| A return pipe between two branches (`returns`) | A return whose endpoints are on the same branch, or that touches the hub |
 
 The errors are deliberate. They stop a sloppy layout from ever rendering.
 
@@ -229,8 +240,9 @@ The hub centre is the origin (0, 0). y grows downward.
   - An up/down flow attaches at the bottom centre and top centre.
   - The hub attaches at its side centres.
 - **Curves:** one cubic S-curve per pipe. The handle length is half the distance along the flow direction (minimum 24), and the curve always starts and ends parallel to the flow. The flow direction comes from the branch, never from comparing dx and dy (the v1 bug source).
-- **Loops are orthogonal, like a metro line:** straight out of the lane card, a 24-unit rounded corner, straight across `GAP_LOOP` beyond every card of the branch in that span, a corner, then straight into the target card. Upper lanes loop above, lower lanes loop below. Clearance is guaranteed by construction.
-- **Classes and markers:** every pipe is `<g class="pipe pipe-KIND" data-type="KIND" data-id="FROM__TO">` with one `<path>`. Arrowheads: `url(#mArrowMain)` on every kind except `feedback` (`url(#mArrowOk)`) and `control` (none).
+- **Loops are orthogonal, like a metro line:** straight out of the lane card, a 24-unit rounded corner, straight across `GAP_LOOP` beyond every card of the branch in that span, a corner, then straight into the target card. Upper lanes loop above, lower lanes loop below. Clearance is guaranteed by construction. A feedback loop carries no dots.
+- **Returns (2.3.0) are also orthogonal, metro style, but cross to a different branch:** leave the `from` card at its top centre; rise to a clearance band `GAP_LOOP` above the topmost edge of every card and pipe of the `from` card's own branch that lies within the horizontal span the return will cross; run across to a vertical corridor kept `GAP_LOOP` clear of the outer edge of every card of the `to` branch and of the hub, on the side `from` approaches from; run down that corridor to the `to` card's port height (`PORT_OFFSET` below its top); enter `to` horizontally on its facing side. Three 24-unit rounded corners, same construction as a loop's two. Recomputed from the two cards' real positions on every call, so it never goes stale across a height change. Unlike a feedback loop, **a return carries dots** -- the point of the feature is showing the answer travel back.
+- **Classes and markers:** every pipe is `<g class="pipe pipe-KIND" data-type="KIND" data-id="FROM__TO">` with one `<path>`. Arrowheads: `url(#mArrowMain)` on every kind except `feedback` (`url(#mArrowOk)`) and `control` (none) -- a return uses the standard main arrow, pointing into the `to` card.
 - **Coordinates:** all pipes live inside one `<g id="wfPipes" transform="translate(originX,originY)">`, so pipe maths stays in origin-centred units.
 - **Reversed branches (2.2.0):** a `flow: 'in'` branch swaps each of its pipes' `from`/`to` ends after normal placement, so arrowheads and dots run toward the hub. The geometry (port sides, curve handles, card positions) is unchanged, since `buildPipe` derives everything from the two cards' real positions, not from which end started the flow.
 
@@ -278,6 +290,11 @@ Runs on the pure layout in both modes (unit tests) and in the browser after load
 | `V5_PORT_OFF_CARD` | A sideways port sits inside its card |
 | `V6_OUTSIDE_CANVAS` | Every card inside the canvas |
 | `V7_DOM_DRIFT` | Browser only: each undragged card's real position and height match the layout within 2 units |
+| `V8_RETURN_CLEARANCE` | A return pipe keeps at least `GAP_LOOP` from every card it does not connect, in both modes |
+
+`V3_SECTOR` deliberately excludes return pipes from branch geometry: a return crosses between branches
+on purpose, so leaving it in that check would fail by design. `V8_RETURN_CLEARANCE` is what replaces
+that protection for a return pipe specifically.
 
 Every violation prints `console.warn('[wf-inspector]', code, a, b, detail)` and lands in `window.__wfLayoutReport`:
 
@@ -332,10 +349,11 @@ Card width is `WF.TOKENS.HUB_W` for the hub or satellite `above`, the satellite'
 
 ## 13. Versioning and caching
 
-- The page loads `../framework/wf-framework-v2.js?v=2.2.0`. A bug-fix release bumps the query string (2.0.1) so browsers fetch the new file.
+- The page loads `../framework/wf-framework-v2.js?v=2.3.0`. A bug-fix release bumps the query string (2.0.1) so browsers fetch the new file.
 - A change that would move any existing card is a breaking change: create `wf-framework-v3.js`, keep v2 in place for pages not yet moved, and add a migration prompt.
 - 2.1.0 moved cards on purpose: it was released together with the only page on v2 (LeadGenPro), which was the page being fixed. Any future card-moving change with more than one page on v2 still needs wf-framework-v3.js.
 - 2.2.0 (`flow: 'in'` branches) moves no card on any existing page (LeadGenPro, Account Enrichment): it only reverses which end of a pipe is `from` and which is `to` on branches that opt in, so no `wf-framework-v3.js` is needed for this release.
+- 2.3.0 (the `returns` pipe) moves no card on any existing page (LeadGenPro, Account Enrichment, RAG assistant): a return is drawn entirely from the existing positions of the two cards it connects, so no `wf-framework-v3.js` is needed for this release either.
 - The file must stay free of client names (it is publicly served).
 
 ---

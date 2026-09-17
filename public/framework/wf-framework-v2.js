@@ -10,7 +10,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  var VERSION = '2.2.0';
+  var VERSION = '2.3.0';
 
   var TOKENS = Object.freeze({
     CARD_W: 170,        // every normal card
@@ -406,6 +406,84 @@
     return { id: lp.from + '__' + lp.to, from: lp.from, to: lp.to, kind: 'feedback', segs: segs };
   }
 
+  // Orthogonal path through a list of waypoints, corners rounded up to `radius` (clamped to
+  // half of each adjacent leg so a short leg never overshoots). Generalises buildLoop's two-corner
+  // routine to any number of turns; buildLoop keeps its own inline version untouched.
+  function buildOrthogonalRoute(pts, radius) {
+    if (pts.length < 2) throw new Error('WF: a route needs at least 2 points');
+    if (pts.length === 2) return [lineSeg(pts[0], pts[1])];
+    var segs = [], cur = pts[0];
+    for (var i = 1; i < pts.length - 1; i++) {
+      var corner = pts[i], next = pts[i + 1];
+      var dPrev = Math.hypot(corner.x - cur.x, corner.y - cur.y);
+      var dNext = Math.hypot(next.x - corner.x, next.y - corner.y);
+      var r = Math.max(0, Math.min(radius, dPrev / 2, dNext / 2));
+      var a = dPrev > 0 ? { x: corner.x - (corner.x - cur.x) / dPrev * r, y: corner.y - (corner.y - cur.y) / dPrev * r } : corner;
+      var b = dNext > 0 ? { x: corner.x + (next.x - corner.x) / dNext * r, y: corner.y + (next.y - corner.y) / dNext * r } : corner;
+      segs.push(lineSeg(cur, a));
+      segs.push(cornerSeg(a, corner, b));
+      cur = b;
+    }
+    segs.push(lineSeg(cur, pts[pts.length - 1]));
+    return segs;
+  }
+
+  // Return pipes cross from one branch to another (orthogonal, metro style): out the top of
+  // `from`, across above everything of its own branch in the crossed span, down a corridor kept
+  // GAP_LOOP clear of the `to` branch and the hub, in the facing side of `to`. Recomputed from the
+  // two cards' real positions every call, exactly like buildLoop -- nothing here may be cached
+  // across a height change or the route will run through a card that grew in Full Detail.
+  function buildReturn(rp, cards, flow, loops) {
+    var a = cards[rp.from], b = cards[rp.to];
+    if (!a || !b) throw new Error('WF: return references unknown card ' + rp.from + ' -> ' + rp.to);
+    if (a.role === 'hub' || b.role === 'hub') throw new Error('WF: a return cannot touch the hub');
+    if (a.branch === b.branch) throw new Error('WF: return "' + rp.from + '" -> "' + rp.to + '" is on one branch (use loops instead)');
+
+    var xFrom = a.x + a.w / 2;
+
+    // vertical corridor: GAP_LOOP clear of the `to` branch + the hub, on the side `from` approaches from
+    var groupMinX = Infinity, groupMaxX = -Infinity;
+    Object.keys(cards).forEach(function (id) {
+      var c = cards[id];
+      if (c.role === 'hub' || c.branch === b.branch) { groupMinX = Math.min(groupMinX, c.x); groupMaxX = Math.max(groupMaxX, right(c)); }
+    });
+    var fromRight = xFrom >= (groupMinX + groupMaxX) / 2;
+    var corridorX = fromRight ? groupMaxX + T.GAP_LOOP : groupMinX - T.GAP_LOOP;
+
+    // clearance band: GAP_LOOP above the topmost edge of the `from` branch's own cards/pipes
+    // that lie within the horizontal span the return crosses
+    var spanLo = Math.min(xFrom, corridorX), spanHi = Math.max(xFrom, corridorX);
+    var bandTop = a.y;
+    Object.keys(cards).forEach(function (id) {
+      var c = cards[id];
+      if (c.branch !== a.branch) return;
+      if (c.x < spanHi && right(c) > spanLo) bandTop = Math.min(bandTop, c.y);
+    });
+    flow.forEach(function (f) {
+      var to = cards[f.to];
+      if (!to || to.branch !== a.branch) return;
+      samplePipe(buildPipe(f, cards), 24).forEach(function (s) { if (s.x > spanLo && s.x < spanHi) bandTop = Math.min(bandTop, s.y); });
+    });
+    (loops || []).forEach(function (lp) {
+      var to = cards[lp.to];
+      if (!to || to.branch !== a.branch) return;
+      samplePipe(buildLoop(lp, cards), 24).forEach(function (s) { if (s.x > spanLo && s.x < spanHi) bandTop = Math.min(bandTop, s.y); });
+    });
+    var bandY = bandTop - T.GAP_LOOP;
+
+    var portY = b.y + T.PORT_OFFSET;
+    var entryX = fromRight ? right(b) : b.x;
+
+    var pts = [
+      { x: xFrom, y: a.y },
+      { x: xFrom, y: bandY },
+      { x: corridorX, y: bandY },
+      { x: corridorX, y: portY },
+      { x: entryX, y: portY }
+    ];
+    return { id: rp.from + '__' + rp.to, from: rp.from, to: rp.to, kind: 'return', segs: buildOrthogonalRoute(pts, 24) };
+  }
+
   // n samples PER SEGMENT (segment endpoints shared)
   function samplePipe(pipe, n) {
     var out = [];
@@ -427,6 +505,7 @@
   }
   function dotCount(len) { return Math.max(T.DOT_MIN, Math.min(T.DOT_MAX, Math.round(len / T.DOT_SPACING))); }
   function carriesDots(kind) { return kind !== 'feedback' && kind !== 'control'; }
+  function finalizePipe(p) { p.len = pipeLength(p); p.dots = carriesDots(p.kind) ? dotCount(p.len) : 0; return p; }
 
   /* ---------------- public layout ---------------- */
   function layout(spec, heights, mode, opts) {
@@ -440,18 +519,21 @@
       Object.keys(raw.branchIds).forEach(function (bid) { envelopes[bid] = envelopeOf(raw.branchIds[bid], raw.cards); envelopes[bid].ids = raw.branchIds[bid]; });
     } else if (spec.pattern === 'line') {
       raw = lineRaw(spec, heights, mode);
+      if (spec.returns && spec.returns.length) throw new Error('WF: "returns" is brain-only, for now');
     } else {
       throw new Error('WF: unknown pattern "' + spec.pattern + '"');
     }
     var loops = spec.loops || [];
+    var returns = spec.pattern === 'brain' ? (spec.returns || []) : [];
     var pipes = buildAllPipes(raw.flow, loops, raw.cards);
-    return { pattern: spec.pattern, mode: mode, cards: raw.cards, pipes: pipes, envelopes: envelopes, flow: raw.flow, loops: loops };
+    if (returns.length) pipes = pipes.concat(returns.map(function (rp) { return finalizePipe(buildReturn(rp, raw.cards, raw.flow, loops)); }));
+    return { pattern: spec.pattern, mode: mode, cards: raw.cards, pipes: pipes, envelopes: envelopes, flow: raw.flow, loops: loops, returns: returns };
   }
 
   function buildAllPipes(flow, loops, cards) {
     var pipes = flow.map(function (f) { return buildPipe(f, cards); });
     loops.forEach(function (lp) { pipes.push(buildLoop(lp, cards)); });
-    pipes.forEach(function (p) { p.len = pipeLength(p); p.dots = carriesDots(p.kind) ? dotCount(p.len) : 0; });
+    pipes.forEach(finalizePipe);
     return pipes;
   }
 
@@ -465,7 +547,10 @@
       copy.x = c.x + o.dx; copy.y = c.y + o.dy;
       cards[id] = copy;
     });
-    return { pattern: L.pattern, mode: L.mode, cards: cards, pipes: buildAllPipes(L.flow, L.loops, cards), envelopes: null, flow: L.flow, loops: L.loops, dragged: true };
+    var pipes = buildAllPipes(L.flow, L.loops, cards);
+    var returns = L.returns || [];
+    if (returns.length) pipes = pipes.concat(returns.map(function (rp) { return finalizePipe(buildReturn(rp, cards, L.flow, L.loops)); }));
+    return { pattern: L.pattern, mode: L.mode, cards: cards, pipes: pipes, envelopes: null, flow: L.flow, loops: L.loops, returns: returns, dragged: true };
   }
 
   // Canvas: union of content bounds across BOTH modes + pad, for every pattern (stable size, best fit zoom).
@@ -545,6 +630,26 @@
         if (X < 0 || Y < 0 || X + c.w > canvas.w || Y + c.h > canvas.h) v.push({ code: 'V6_OUTSIDE_CANVAS', a: id });
       });
     }
+    // V8 return clearance: a return pipe keeps GAP_LOOP from every card it does not connect
+    (L.returns || []).forEach(function (rp) {
+      var pid = rp.from + '__' + rp.to, rpipe = null;
+      for (var pi = 0; pi < L.pipes.length; pi++) { if (L.pipes[pi].id === pid && L.pipes[pi].kind === 'return') { rpipe = L.pipes[pi]; break; } }
+      if (!rpipe) return;
+      var pts = samplePipe(rpipe, 32);
+      ids.forEach(function (id) {
+        if (id === rpipe.from || id === rpipe.to) return;
+        var c = L.cards[id];
+        var cardRect = { x0: c.x, y0: c.y, x1: right(c), y1: bottom(c) };
+        for (var k = 0; k < pts.length; k++) {
+          var s = pts[k];
+          var g = envGap(cardRect, { x0: s.x, y0: s.y, x1: s.x, y1: s.y });
+          if (g < T.GAP_LOOP - 0.5) {
+            v.push({ code: 'V8_RETURN_CLEARANCE', a: rpipe.id, b: id, detail: 'gap ' + Math.round(g) + ' < ' + T.GAP_LOOP });
+            break;
+          }
+        }
+      });
+    });
     return v;
   }
 
